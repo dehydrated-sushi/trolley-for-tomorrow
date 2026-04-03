@@ -4,7 +4,7 @@
 
 A food decision support application helping Australians manage food budgets, plan affordable meals, and reduce food waste. Built as part of FIT5120 Industry Experience Studio at Monash University.
 
-For a detailed breakdown of what has been built, see [docs/project_status.md](docs/project_status.md)
+For a detailed breakdown of what has been built, see [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
 
 ---
 ## The Problem
@@ -99,7 +99,7 @@ All CHANGELOG files across the project follow semantic versioning.
 | Layer | Technology |
 |---|---|
 | Frontend | TBC |
-| Backend | TBC |
+| Backend | Flask (Python 3.14) |
 | Database | PostgreSQL (Neon) |
 | Hosting | Render |
 | Data Processing | Python, Pandas, Jupyter |
