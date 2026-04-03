@@ -4,8 +4,9 @@
 
 A food decision support application helping Australians manage food budgets, plan affordable meals, and reduce food waste. Built as part of FIT5120 Industry Experience Studio at Monash University.
 
----
+For a detailed breakdown of what has been built, see [docs/project_status.md](docs/project_status.md)
 
+---
 ## The Problem
 
 Australia wastes 7.6 million tonnes of food per year. 32% of Australian households experienced food insecurity in 2024. Nearly two thirds of Australians experience decision fatigue around meal planning. This app addresses all three problems through a single unified tool.
@@ -47,8 +48,7 @@ Australia wastes 7.6 million tonnes of food per year. 32% of Australian househol
 | `shimmin` | Shimmin's working branch |
 
 **Rules:**
-- Never push directly to `main` or `production`
-- All changes go through a pull request
+- Never push directly to `main` 
 - At least one other team member must review before merging
 
 ---
@@ -64,6 +64,33 @@ trolley-for-tomorrow/
 ```
 
 See each folder's README for detailed setup instructions.
+
+### Versioning Convention
+
+All CHANGELOG files across the project follow semantic versioning.
+
+| Version Format | When to use |
+|---|---|
+| `1.0.0` | First release of a module |
+| `1.0.1` | Small bug fix to existing functionality |
+| `1.1.0` | New feature added to an existing module |
+| `2.0.0` | Breaking change such as restructuring or switching tech stack |
+
+#### Examples
+
+- `1.0.0` — initial backend setup
+- `1.0.1` — fix bug in health check endpoint
+- `1.1.0` — add nutrition scoring logic
+- `1.2.0` — add receipt scanning
+- `2.0.0` — switch from Flask to FastAPI
+
+#### Rules
+
+- Last number = bug fix
+- Middle number = new feature added
+- First number = breaking change
+- Always update the relevant module CHANGELOG when you make a change
+- Never update another person's module CHANGELOG
 
 ---
 
@@ -81,13 +108,13 @@ See each folder's README for detailed setup instructions.
 
 ## Getting Started
 
-### Step 1 — Clone the repo
+### Step 1 - Clone the repo
 ```
 git clone https://github.com/dehydrated-sushi/trolley-for-tomorrow.git
 cd trolley-for-tomorrow
 ```
 
-### Step 2 — Switch to your branch
+### Step 2 - Switch to your branch
 
 Each person works only on their own branch. Never work on main directly.
 ```
@@ -98,14 +125,14 @@ git checkout karl       # Karl
 git checkout shimmin    # Shimmin
 ```
 
-### Step 3 — Check you are on the right branch
+### Step 3 - Check you are on the right branch
 ```
 git branch
 ```
 
 The branch with a `*` next to it is the one you are currently on. Make sure it is yours before doing anything.
 
-### Step 4 — Before you start working, always pull latest changes
+### Step 4 - Before you start working, always pull latest changes
 ```
 git pull origin main
 ```
@@ -116,12 +143,12 @@ This makes sure you have the latest code before you start. Do this every single 
 
 ## How to Save and Push Your Work
 
-### Step 1 — Check what files you have changed
+### Step 1 - Check what files you have changed
 ```
 git status
 ```
 
-### Step 2 — Stage your changes
+### Step 2 - Stage your changes
 
 To add everything you changed:
 ```
@@ -133,47 +160,18 @@ To add a specific file only:
 git add backend/modules/auth/routes.py
 ```
 
-### Step 3 — Commit with a proper message
+### Step 3 - Commit with a proper message
 ```
 git commit -m "feat(karl/auth): add login endpoint"
 ```
 
 See the Commit Message Convention section below for the full format.
 
-### Step 4 — Push to your branch
+### Step 4 - Push to your branch
 ```
 git push origin das       # replace my name with your branch name
 ```
 
----
-
-## How to Merge Your Work into Main
-
-When your work is ready and tested:
-
-### Step 1 — Go to GitHub
-
-Go to the repository on GitHub.
-
-### Step 2 — Open a Pull Request
-
-Click **Compare and pull request** next to your branch, or go to **Pull requests** and click **New pull request**.
-
-Set it as:
-- Base: `main`
-- Compare: your branch (e.g. `das`)
-
-### Step 3 — Write a description
-
-Describe what you did and why. Tag a teammate to review it.
-
-### Step 4 — Wait for approval
-
-At least one other team member must approve before it can be merged. Do not merge your own pull request without a review.
-
-### Step 5 — Merge
-
-Once approved click **Merge pull request**.
 
 ---
 
@@ -184,8 +182,6 @@ If main has been updated and you want those changes on your branch:
 git checkout das          # make sure you are on your branch not mine's
 git pull origin main      # pull latest main into your branch
 ```
-
-If there are conflicts Git will tell you. Come to Saubhagya.
 
 ---
 
@@ -226,6 +222,7 @@ refactor(das/ocr-engine): improve receipt text parsing accuracy
 - If you are unsure what type to use, ask Saubhagya
 
 ---
+
 
 ## Common Commands Quick Reference
 
