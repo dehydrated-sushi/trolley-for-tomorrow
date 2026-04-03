@@ -10,6 +10,8 @@ from core.auth import jwt
 from core.config import Config
 from core.database import db
 from core.errors import register_error_handlers
+from security.jwt import register_jwt_error_handlers
+from security.rate_limiter import limiter
 
 
 def create_app():
@@ -19,11 +21,13 @@ def create_app():
     # Initialise extensions
     db.init_app(app)
     jwt.init_app(app)
+    limiter.init_app(app)
     Bcrypt(app)
     CORS(app, origins=Config.CORS_ORIGINS)
 
     # Register error handlers
     register_error_handlers(app)
+    register_jwt_error_handlers()
 
     # Auto-discover and register module blueprints
     modules_dir = os.path.join(os.path.dirname(__file__), "modules")
