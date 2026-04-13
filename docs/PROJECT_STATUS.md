@@ -145,5 +145,5 @@ Branch strategy: individual feature branches (`das`, `arsh`, `jasmine`, `karl`, 
 |-------|-----------|
 | Frontend | React (TBC) |
 | Backend | Flask (Python 3.14) |
-| Database | PostgreSQL (Neon) |
+| Database | PostgreSQL 17.6 (AWS RDS — instance: `trolley-for-tomorrow`, region: `ap-southeast-2`) — Connected and ready |
 | Hosting | Render |

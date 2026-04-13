@@ -1,5 +1,14 @@
 # Core Changelog
 
+## [1.1.0] - 2026-04-13
+
+### Added
+- AWS RDS PostgreSQL instance connected
+- SSL certificate required for all database connections
+- rds-ca.pem added to .gitignore
+- trolley database created on RDS instance
+- DATABASE_URL updated in .env to use SSL verify-ca mode
+
 ## [1.0.0] - 2026-04-02
 
 ### Added

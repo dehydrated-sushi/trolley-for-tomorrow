@@ -23,7 +23,7 @@ cp .env.example .env
 | Variable | What it is |
 |----------|-----------|
 | `SECRET_KEY` | Flask session signing key. Use a long random string |
-| `DATABASE_URL` | PostgreSQL connection string from Neon |
+| `DATABASE_URL` | PostgreSQL connection string (see Database Setup below) |
 | `JWT_SECRET_KEY` | Signing key for auth tokens. Different from SECRET_KEY |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | How long a login token lasts. Default 30 |
 | `CORS_ORIGINS` | Comma-separated frontend URLs allowed to call the API |
@@ -81,3 +81,30 @@ def login():
 ```
 
 No changes to `app.py` needed. The blueprint is picked up automatically.
+
+## Database Setup
+
+The project uses **AWS RDS PostgreSQL 17.6** in the **ap-southeast-2 (Sydney)** region on a **db.t3.micro** instance. SSL is required for all connections.
+
+### Download the SSL certificate
+
+Each developer must download the RDS CA certificate locally. This file is gitignored and will not be committed:
+
+```bash
+curl -o backend/rds-ca.pem https://truststore.pki.rds.amazonaws.com/ap-southeast-2/ap-southeast-2-bundle.pem
+```
+
+### DATABASE_URL format
+
+Set `DATABASE_URL` in your `backend/.env` using this format:
+
+```
+postgresql://USER:PASSWORD@HOST:5432/trolley?sslmode=verify-ca&sslrootcert=backend/rds-ca.pem
+```
+
+Replace `USER`, `PASSWORD`, and `HOST` with the actual credentials. Request these from Das privately — do not share them in any public channel or commit them to the repository.
+
+### Important
+
+- `rds-ca.pem` is gitignored and **must be downloaded locally** by each developer
+- SSL (`sslmode=verify-ca`) is enforced — connections without the certificate will be rejected
