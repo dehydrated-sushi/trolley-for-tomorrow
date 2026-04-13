@@ -53,7 +53,7 @@ def create_app():
 
     @app.route("/health", methods=["GET"])
     def health():
-        return jsonify({"status": "healthy"}), 200
+        return jsonify({"status": "ok"}), 200
 
     @app.route("/api/health", methods=["GET"])
     def api_health():
@@ -73,7 +73,5 @@ def create_app():
     return app
 
 
-app = create_app()
-
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("FLASK_ENV") == "development")
+    create_app().run(debug=os.environ.get("FLASK_ENV") == "development")

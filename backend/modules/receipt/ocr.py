@@ -1,15 +1,15 @@
 import os
 import re
-import cv2
-import pandas as pd
-import pytesseract
-from rapidfuzz import process, fuzz
 
+# Heavy deps (opencv, pandas, …) are imported inside functions so ``import app``
+# stays light for production WSGI workers and platforms with tight build limits.
 
 OCR_THRESHOLD = 75
 
 
 def preprocess_receipt(image_bgr):
+    import cv2
+
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.resize(gray, None, fx=1.7, fy=1.7, interpolation=cv2.INTER_CUBIC)
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
@@ -18,6 +18,8 @@ def preprocess_receipt(image_bgr):
 
 
 def run_ocr(image):
+    import pytesseract
+
     config = "--oem 3 --psm 6"
     return pytesseract.image_to_string(image, config=config)
 
@@ -28,6 +30,8 @@ def split_lines(text):
 
 
 def load_known_items(csv_path=None):
+    import pandas as pd
+
     if not csv_path or not os.path.exists(csv_path):
         return []
 
@@ -127,6 +131,8 @@ def is_junk_line(line):
 
 
 def match_known_name(cleaned_name, known_names, threshold=80):
+    from rapidfuzz import fuzz, process
+
     if not cleaned_name or not known_names:
         return None, None
 
@@ -138,6 +144,8 @@ def match_known_name(cleaned_name, known_names, threshold=80):
 
 
 def extract_receipt_items(raw_lines, known_names, threshold=80):
+    import pandas as pd
+
     results = []
     used_qty_lines = set()
 
@@ -183,6 +191,8 @@ def extract_receipt_items(raw_lines, known_names, threshold=80):
 
 
 def process_receipt(image_path, known_items_csv=None, threshold=OCR_THRESHOLD):
+    import cv2
+
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image not found: {image_path}")
 

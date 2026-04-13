@@ -9,7 +9,7 @@ gunicorn==23.0.0
 pytest==8.3.5
 pytesseract
 Pillow
-opencv-python
+opencv-python-headless
 pandas
 rapidfuzz
 matplotlib
