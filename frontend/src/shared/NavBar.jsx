@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 const NAV_LINKS = [
   { label: 'Dashboard',      to: '/dashboard' },
   { label: 'Your Meals',     to: '/meals'     },
+  { label: 'Upload receipt',     to: '/upload-receipt'     },
   { label: 'Fridge',         to: '/fridge'    },
   { label: 'Shopping List',  to: '/shopping'  },
 ]
@@ -111,6 +112,7 @@ export default function NavBar() {
             >
               Sign up free
             </Link>
+            <Link to="/upload-receipt">Upload Receipt</Link>
           </div>
         </div>
       </div>
