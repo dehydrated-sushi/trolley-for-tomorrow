@@ -7,7 +7,16 @@ load_dotenv()
 
 
 def _database_uri():
-    uri = os.environ["DATABASE_URL"]
+    """Resolve SQLAlchemy database URI.
+
+    If ``DATABASE_URL`` is missing or empty (common on first Render deploy),
+    fall back to a file-backed SQLite DB under ``/tmp`` so the process can
+    boot and ``/health`` succeeds. Set a real ``DATABASE_URL`` for production.
+    """
+    raw = os.environ.get("DATABASE_URL")
+    uri = raw.strip() if raw else ""
+    if not uri:
+        return "sqlite:////tmp/trolley_fallback.db"
     # SQLAlchemy 2.x uses psycopg (v3) by default with the +psycopg driver
     if uri.startswith("postgres://"):
         uri = uri.replace("postgres://", "postgresql+psycopg://", 1)
