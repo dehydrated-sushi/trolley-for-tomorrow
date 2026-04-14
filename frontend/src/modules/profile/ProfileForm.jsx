@@ -150,7 +150,7 @@ export default function ProfileForm() {
             <div>
               <div className="text-sm font-medium text-[#0c1f14]">Sign out</div>
               <div className="text-xs text-[#5a7a68] font-light mt-0.5">
-                Sign out of your NutriPlan account
+                Sign out of your trolley for tomorrow account
               </div>
             </div>
 

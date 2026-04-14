@@ -55,7 +55,7 @@ export default function SignupPage() {
   return (
     <AuthCard
       title="Sign up"
-      subtitle="Create your NutriPlan account."
+      subtitle="Create your trolley for tomorrow account."
       footer={
         <p className="text-sm text-[#5a7a68]">
           Already have an account?{' '}
