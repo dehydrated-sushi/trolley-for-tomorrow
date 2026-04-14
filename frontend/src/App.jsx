@@ -16,16 +16,16 @@ export default function App() {
     <BrowserRouter>
       <NavBar />
       <Routes>
-        <Route path="/"               element={<HomePage />} />
-        <Route path="/dashboard"     element={<DashboardPage />} />
-        <Route path="/meals"         element={<MealsPage />} />
-        <Route path="/shopping"      element={<ShoppingListPage />} />
-        <Route path="/fridge"        element={<FridgeView />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/meals" element={<MealsPage />} />
+        <Route path="/shopping" element={<ShoppingListPage />} />
+        <Route path="/fridge" element={<FridgeView />} />
         <Route path="/upload-receipt" element={<UploadReceiptPage />} />
-        <Route path="/profile"       element={<ProfileForm />} />
-        <Route path="/login"         element={<LoginPage />} />
-        <Route path="/signup"        element={<SignupPage />} />
-        <Route path="*"              element={<NotFoundPage />} />
+        <Route path="/profile" element={<ProfileForm />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   )
