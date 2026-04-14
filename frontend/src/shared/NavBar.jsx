@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom'
 const NAV_LINKS = [
   { label: 'Dashboard',      to: '/dashboard' },
   { label: 'Your Meals',     to: '/meals'     },
-  { label: 'Upload receipt',     to: '/upload-receipt'     },
   { label: 'Fridge',         to: '/fridge'    },
   { label: 'Shopping List',  to: '/shopping'  },
 ]
@@ -23,7 +22,7 @@ export default function NavBar() {
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
             <span className="font-serif text-[19px] text-white tracking-tight">
-              Nutri<span className="text-[#5cad76]">Plan</span>
+              trolly-for-tomorrow<span className="text-[#5cad76]">Plan</span>
             </span>
           </Link>
 
@@ -112,7 +111,6 @@ export default function NavBar() {
             >
               Sign up free
             </Link>
-            <Link to="/upload-receipt">Upload Receipt</Link>
           </div>
         </div>
       </div>
