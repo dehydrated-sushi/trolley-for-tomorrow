@@ -1,165 +1,188 @@
-import { useBudget } from './useBudget'
-import BudgetInput from './BudgetInput'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import PageShell from '../../shared/PageShell'
 
-// Mock user info — replace with auth context later
-const USER = {
-  name: 'user',
-  email: 'user@example.com',
-  location: 'Melbourne, VIC',
-  initials: 'U',
+function addActivity(message) {
+  const saved = localStorage.getItem('dashboard_activity')
+  const current = saved ? JSON.parse(saved) : []
+
+  const next = [
+    {
+      id: `${Date.now()}-${Math.random()}`,
+      message,
+      createdAt: new Date().toISOString(),
+    },
+    ...current,
+  ].slice(0, 8)
+
+  localStorage.setItem('dashboard_activity', JSON.stringify(next))
 }
 
 export default function ProfileForm() {
-  const {
-    budget,
-    spent,
-    remaining,
-    spentPct,
-    isOver,
-    saved,
-    error,
-    handleChange,
-    handleSave,
-  } = useBudget()
+  const navigate = useNavigate()
+
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [budgetInput, setBudgetInput] = useState('42.10')
+  const [saveMessage, setSaveMessage] = useState('')
+
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('user_profile')
+    const savedBudget = localStorage.getItem('dashboard_budget')
+
+    if (savedProfile) {
+      const profile = JSON.parse(savedProfile)
+      setFullName(profile.fullName ?? '')
+      setEmail(profile.email ?? '')
+    } else {
+      setFullName('Karl Wang')
+      setEmail('karl@example.com')
+    }
+
+    if (savedBudget) {
+      setBudgetInput(Number(savedBudget).toFixed(2))
+    }
+  }, [])
+
+  const handleSaveProfile = (e) => {
+    e.preventDefault()
+
+    const nextBudget = Number(budgetInput)
+
+    if (!fullName.trim() || !email.trim()) {
+      setSaveMessage('Please complete your name and email.')
+      return
+    }
+
+    if (Number.isNaN(nextBudget) || nextBudget < 0) {
+      setSaveMessage('Please enter a valid budget.')
+      return
+    }
+
+    const profile = {
+      fullName: fullName.trim(),
+      email: email.trim(),
+    }
+
+    localStorage.setItem('user_profile', JSON.stringify(profile))
+    localStorage.setItem('dashboard_budget', JSON.stringify(nextBudget))
+    localStorage.setItem('isLoggedIn', JSON.stringify(true))
+
+    addActivity('Updated profile information')
+    setSaveMessage('Profile updated successfully.')
+
+    setTimeout(() => {
+      navigate('/dashboard')
+    }, 700)
+  }
+
+  const handleSignOut = () => {
+    localStorage.removeItem('isLoggedIn')
+    localStorage.removeItem('user_profile')
+    localStorage.removeItem('dashboard_budget')
+    localStorage.removeItem('dashboard_expiringSoon')
+    localStorage.removeItem('dashboard_mealsPlanned')
+    localStorage.removeItem('dashboard_activity')
+    navigate('/login')
+  }
 
   return (
-    <div className="min-h-screen bg-[#f4fbf6] pt-16">
-      <div className="w-full px-4 md:px-8 lg:px-14 py-8 max-w-2xl">
-        {/* ── Page header ── */}
-        <div className="mb-8">
-          <div className="text-xs font-medium tracking-[1.2px] uppercase text-[#5a7a68] mb-1">
-            Account
-          </div>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#0c1f14] tracking-tight">
-            My Profile
-          </h1>
-        </div>
-
-        {/* ── User info card ── */}
-        <div className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-5 mb-5 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#5cad76] to-[#3e7a52] flex items-center justify-center text-white text-xl font-semibold flex-shrink-0">
-            {USER.initials}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="text-base font-medium text-[#0c1f14]">{USER.name}</div>
-            <div className="text-sm text-[#5a7a68] mt-0.5">{USER.email}</div>
-            <div className="text-xs text-[#5a7a68] mt-0.5">{USER.location}</div>
-          </div>
-
-          <button className="text-xs text-[#5a7a68] border border-[#cce4d6] rounded-lg px-3 py-1.5 hover:bg-[#f4fbf6] hover:border-[#5cad76] transition-all flex-shrink-0">
-            Edit
-          </button>
-        </div>
-
-        {/* ── Budget section ── */}
-        <div className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-5 mb-5">
+    <PageShell
+      eyebrow="Account"
+      title="My Profile"
+      right={(
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 bg-[#1e3d2a] text-white text-sm font-medium px-5 py-2.5 rounded-full hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150"
+        >
+          Back to dashboard →
+        </Link>
+      )}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <form
+          onSubmit={handleSaveProfile}
+          className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-5"
+        >
           <div className="text-xs font-medium tracking-[1px] uppercase text-[#5a7a68] mb-4">
-            Weekly Budget
+            Profile details
           </div>
 
-          <BudgetInput
-            value={budget}
-            error={error}
-            saved={saved}
-            onChange={handleChange}
-            onSave={handleSave}
-          />
-
-          {/* Budget summary — only shown when budget is set */}
-          {budget && Number(budget) > 0 && (
-            <div className="mt-5 pt-5 border-t border-[#e0ede4]">
-              {/* Metric cards */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-[#f4fbf6] rounded-xl px-4 py-3">
-                  <div className="text-xs text-[#5a7a68] mb-1">Weekly budget</div>
-                  <div className="font-serif text-2xl font-bold text-[#0c1f14]">
-                    ${Number(budget).toFixed(2)}
-                  </div>
-                </div>
-
-                <div className="bg-[#f4fbf6] rounded-xl px-4 py-3">
-                  <div className="text-xs text-[#5a7a68] mb-1">Remaining</div>
-                  <div
-                    className={`font-serif text-2xl font-bold ${
-                      isOver ? 'text-red-500' : 'text-[#3e7a52]'
-                    }`}
-                  >
-                    {isOver ? '-' : ''}${remaining}
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div>
-                <div className="flex justify-between text-xs text-[#5a7a68] mb-1.5">
-                  <span>Spent ${spent.toFixed(2)}</span>
-                  <span>Budget ${Number(budget).toFixed(2)}</span>
-                </div>
-
-                <div className="h-2 bg-[#e8f5ed] rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isOver
-                        ? 'bg-red-400'
-                        : 'bg-gradient-to-r from-[#3e7a52] to-[#5cad76]'
-                    }`}
-                    style={{ width: `${spentPct}%` }}
-                  />
-                </div>
-
-                {isOver && (
-                  <p className="text-xs text-red-500 mt-1.5 font-medium">
-                    ⚠ You've exceeded your weekly budget
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Preferences section (placeholder) ── */}
-        <div className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-5 mb-5">
-          <div className="text-xs font-medium tracking-[1px] uppercase text-[#5a7a68] mb-4">
-            Dietary Preferences
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {['Vegetarian', 'Vegan', 'Gluten free', 'Dairy free', 'Nut free', 'Halal'].map((pref) => (
-              <button
-                key={pref}
-                className="text-xs px-3.5 py-1.5 rounded-full border border-[#cce4d6] text-[#5a7a68] hover:border-[#5cad76] hover:text-[#2d4a38] hover:bg-[#f4fbf6] transition-all"
-              >
-                {pref}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-xs text-[#5a7a68] font-light mt-3">
-            Coming soon — dietary preferences will filter your meal recommendations.
-          </p>
-        </div>
-
-        {/* ── Danger zone ── */}
-        <div className="bg-white border border-red-100 rounded-2xl px-6 py-5">
-          <div className="text-xs font-medium tracking-[1px] uppercase text-red-400 mb-4">
-            Account
-          </div>
-
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4">
             <div>
-              <div className="text-sm font-medium text-[#0c1f14]">Sign out</div>
-              <div className="text-xs text-[#5a7a68] font-light mt-0.5">
-                Sign out of your trolley for tomorrow account
-              </div>
+              <label className="block text-sm text-[#2d4a38] mb-2">
+                Full name
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Enter your full name"
+                className="w-full rounded-xl border border-[#cce4d6] px-3 py-2.5 text-sm outline-none focus:border-[#5cad76]"
+              />
             </div>
 
-            <button className="text-xs text-red-500 border border-red-200 rounded-lg px-4 py-2 hover:bg-red-50 transition-colors">
-              Sign out
+            <div>
+              <label className="block text-sm text-[#2d4a38] mb-2">
+                Email address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="w-full rounded-xl border border-[#cce4d6] px-3 py-2.5 text-sm outline-none focus:border-[#5cad76]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#2d4a38] mb-2">
+                Weekly budget
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                placeholder="Enter weekly budget"
+                className="w-full rounded-xl border border-[#cce4d6] px-3 py-2.5 text-sm outline-none focus:border-[#5cad76]"
+              />
+            </div>
+
+            {saveMessage && (
+              <div className="text-sm text-[#3e7a52] bg-[#eef8f1] border border-[#cce4d6] rounded-xl px-3 py-2">
+                {saveMessage}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-[#1e3d2a] text-white text-sm font-medium hover:bg-[#2d5a3d] transition-colors"
+            >
+              Save changes
             </button>
           </div>
+        </form>
+
+        <div className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-5">
+          <div className="text-xs font-medium tracking-[1px] uppercase text-[#5a7a68] mb-4">
+            Account actions
+          </div>
+
+          <div className="text-sm text-[#5a7a68] font-light mb-4">
+            Use this button to sign out of your account and return to the login page.
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full py-3 rounded-xl border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-colors"
+          >
+            Log out
+          </button>
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

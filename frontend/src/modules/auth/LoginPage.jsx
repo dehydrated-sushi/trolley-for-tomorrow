@@ -1,10 +1,12 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import AuthCard from './AuthCard'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 export default function LoginPage() {
+  const navigate = useNavigate()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,8 +36,17 @@ export default function LoginPage() {
         localStorage.setItem('token', data.token)
       }
 
-      alert('Login successful')
-      console.log(data)
+      localStorage.setItem('isLoggedIn', 'true')
+
+      localStorage.setItem(
+        'user_profile',
+        JSON.stringify({
+          fullName: data.user?.name || data.user?.fullName || '',
+          email: data.user?.email || email,
+        })
+      )
+
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Something went wrong')
     } finally {
