@@ -16,7 +16,6 @@ export default function DashboardPage() {
     <PageShell
       eyebrow="Overview"
       title="Dashboard"
-      subtitle="Quick snapshot of your week. (MVP UI — will be wired to API later.)"
       right={(
         <Link
           to="/fridge"
