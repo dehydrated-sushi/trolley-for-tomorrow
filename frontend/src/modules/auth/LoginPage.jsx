@@ -59,7 +59,6 @@ export default function LoginPage() {
         </button>
 
         <div className="text-xs text-[#5a7a68] font-light pt-2 border-t border-[#e0ede4]">
-          之後接上後端時，我會把這裡改成呼叫 `/auth/login`（或你們的實際 endpoint），並把 token/Session 存到 app state。
         </div>
       </form>
     </AuthCard>

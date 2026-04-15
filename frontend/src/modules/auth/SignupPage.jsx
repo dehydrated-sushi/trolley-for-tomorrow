@@ -71,7 +71,6 @@ export default function SignupPage() {
         </button>
 
         <div className="text-xs text-[#5a7a68] font-light pt-2 border-t border-[#e0ede4]">
-          之後接上後端時，這裡會改成註冊 API + 表單驗證 + 錯誤提示。
         </div>
       </form>
     </AuthCard>

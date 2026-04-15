@@ -29,21 +29,47 @@ def create_app():
     register_error_handlers(app)
     register_jwt_error_handlers()
 
+    # Register test blueprint
+    app.register_blueprint(test_bp)
+    app.register_blueprint(receipt_bp, url_prefix="/api/receipts")
+
     # Auto-discover and register module blueprints
     modules_dir = os.path.join(os.path.dirname(__file__), "modules")
     for module_info in pkgutil.iter_modules([modules_dir]):
         module = importlib.import_module(f"modules.{module_info.name}.routes")
         if hasattr(module, "bp"):
             app.register_blueprint(module.bp)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-    # Health check
+    # Basic routes
+    @app.route("/", methods=["GET"])
+    def home():
+        return jsonify({
+            "message": "Backend is running",
+            "status": "ok"
+        }), 200
+
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200
+
+    @app.route("/api/health", methods=["GET"])
+    def api_health():
+        return jsonify({"status": "api healthy"}), 200
+
+    @app.route("/api/routes", methods=["GET"])
+    def list_routes():
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append({
+                "endpoint": rule.endpoint,
+                "methods": sorted(list(rule.methods)),
+                "route": str(rule)
+            })
+        return jsonify({"routes": routes}), 200
 
     return app
 
 
 if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=os.environ.get("FLASK_ENV") == "development")
+    create_app().run(debug=os.environ.get("FLASK_ENV") == "development")
