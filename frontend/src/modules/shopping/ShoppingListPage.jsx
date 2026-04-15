@@ -6,7 +6,6 @@ export default function ShoppingListPage() {
     <PageShell
       eyebrow="Groceries"
       title="Shopping List"
-      subtitle="Shopping list UI."
     >
       <EmptyState
         icon="🛒"
