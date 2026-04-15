@@ -6,7 +6,7 @@ export default function ShoppingListPage() {
     <PageShell
       eyebrow="Groceries"
       title="Shopping List"
-      subtitle="Shopping list UI (MVP). Next step: generate from meal plan + fridge gaps."
+      subtitle="Shopping list UI."
     >
       <EmptyState
         icon="🛒"

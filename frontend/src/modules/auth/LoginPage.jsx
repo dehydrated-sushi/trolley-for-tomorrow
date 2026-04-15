@@ -31,7 +31,7 @@ export default function LoginPage() {
       return
     }
 
-    setError('Invalid mock account. Try demo@test.com / 123456')
+    setError('Invalid mock account. Try demo accounr')
   }
 
   return (
