@@ -1,11 +1,22 @@
+# Python
 __pycache__/
 *.py[cod]
-*.env
+*.egg-info/
 venv/
 .venv/
-node_modules/
-dist/
-.DS_Store
-data/raw/
+.pytest_cache/
+
+# Environment
 .env
 *.env.local
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+
+# Data
+data/raw/
+backend/rds-ca.pem

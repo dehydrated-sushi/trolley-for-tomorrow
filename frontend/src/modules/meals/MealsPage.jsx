@@ -7,7 +7,7 @@ export default function MealsPage() {
     <PageShell
       eyebrow="Planning"
       title="Your Meals"
-
+      subtitle="Meal planner UI (MVP). Next step: connect to recommendation API."
       right={(
         <Link
           to="/fridge"

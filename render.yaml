@@ -42,7 +42,7 @@ services:
         generateValue: true
       - key: JWT_ACCESS_TOKEN_EXPIRES_MINUTES
         value: "30"
-      # 建議填入 Postgres（Neon / RDS）。若留空，後端會用 /tmp 的 SQLite 先啟動（資料不持久，僅便於通過健康檢查與試跑）。
+      # 在 Dashboard 填入你的 Postgres 連線字串（Neon / RDS 等）
       - key: DATABASE_URL
         sync: false
       # 填入前端正式網址，多個用英文逗號分隔，例如：https://nutriplan-frontend.onrender.com

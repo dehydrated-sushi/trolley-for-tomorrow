@@ -1,92 +1,32 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import AuthCard from './AuthCard'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-
 export default function LoginPage() {
-  const navigate = useNavigate()
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    // 前端假账号测试
-    if (email === 'demo@test.com' && password === '123456') {
-      localStorage.setItem('token', 'demo-token-123')
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem(
-        'user_profile',
-        JSON.stringify({
-          fullName: 'Demo User',
-          email: 'demo@test.com',
-        })
-      )
-
-      setLoading(false)
-      navigate('/fridge') // 先不要去 /dashboard，因为你现在没有这个路由
-      return
-    }
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Login failed')
-      }
-
-      if (data.token) {
-        localStorage.setItem('token', data.token)
-      }
-
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem(
-        'user_profile',
-        JSON.stringify({
-          fullName: data.user?.name || data.user?.fullName || '',
-          email: data.user?.email || email,
-        })
-      )
-
-      navigate('/fridge') // 临时先改成 /fridge
-    } catch (err) {
-      setError(err.message || 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <AuthCard
       title="Log in"
-      subtitle="Welcome back."
-      footer={
+      subtitle="Welcome back. This is UI-only for now."
+      footer={(
         <p className="text-sm text-[#5a7a68]">
           No account?{' '}
-          <Link
-            className="text-[#1e3d2a] font-medium underline underline-offset-2"
-            to="/signup"
-          >
+          <Link className="text-[#1e3d2a] font-medium underline underline-offset-2" to="/signup">
             Sign up
           </Link>
         </p>
-      }
+      )}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          // MVP: placeholder until backend auth is connected
+          alert(`Logged in as ${email} (mock)`)
+        }}
+        className="flex flex-col gap-3"
+      >
         <label className="text-xs font-medium text-[#2d4a38]">
           Email
           <input
@@ -111,16 +51,18 @@ export default function LoginPage() {
           />
         </label>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
-
         <button
           type="submit"
-          disabled={loading}
-          className="mt-2 w-full py-3 rounded-xl text-sm font-medium bg-[#1e3d2a] text-white hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150 disabled:opacity-50"
+          className="mt-2 w-full py-3 rounded-xl text-sm font-medium bg-[#1e3d2a] text-white hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150"
         >
-          {loading ? 'Logging in...' : 'Log in'}
+          Log in
         </button>
+
+        <div className="text-xs text-[#5a7a68] font-light pt-2 border-t border-[#e0ede4]">
+          之後接上後端時，我會把這裡改成呼叫 `/auth/login`（或你們的實際 endpoint），並把 token/Session 存到 app state。
+        </div>
       </form>
     </AuthCard>
   )
 }
+

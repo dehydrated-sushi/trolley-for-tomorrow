@@ -13,6 +13,7 @@ export default function NotFoundPage() {
     >
       <div className="bg-white border border-[#cce4d6] rounded-2xl px-6 py-6">
         <div className="text-sm text-[#5a7a68] font-light">
+          你可以回到首頁，或用上方導覽列前往其他功能頁。
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
