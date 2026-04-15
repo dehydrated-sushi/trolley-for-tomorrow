@@ -19,9 +19,9 @@ export default function DashboardPage() {
       subtitle="Quick snapshot of your week."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Expiring soon" value="3" hint="Use these first" />
-        <StatCard label="Budget remaining" value="$42.10" hint="This week" />
-        <StatCard label="Meals planned" value="0" hint="Generate a plan" />
+        <StatCard label="Expiring soon" value={expiringSoon} hint="Use these first" />
+        <StatCard label="Budget remaining" value={`$${budget.toFixed(2)}`} hint="This week" />
+        <StatCard label="Meals planned" value={mealsPlanned} hint="Generate a plan" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
