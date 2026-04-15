@@ -17,6 +17,23 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
+    // 前端假账号测试
+    if (email === 'demo@test.com' && password === '123456') {
+      localStorage.setItem('token', 'demo-token-123')
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem(
+        'user_profile',
+        JSON.stringify({
+          fullName: 'Demo User',
+          email: 'demo@test.com',
+        })
+      )
+
+      setLoading(false)
+      navigate('/fridge') // 先不要去 /dashboard，因为你现在没有这个路由
+      return
+    }
+
     try {
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -37,7 +54,6 @@ export default function LoginPage() {
       }
 
       localStorage.setItem('isLoggedIn', 'true')
-
       localStorage.setItem(
         'user_profile',
         JSON.stringify({
@@ -46,7 +62,7 @@ export default function LoginPage() {
         })
       )
 
-      navigate('/dashboard')
+      navigate('/fridge') // 临时先改成 /fridge
     } catch (err) {
       setError(err.message || 'Something went wrong')
     } finally {
