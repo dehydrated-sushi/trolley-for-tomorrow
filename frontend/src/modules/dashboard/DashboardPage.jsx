@@ -16,15 +16,7 @@ export default function DashboardPage() {
     <PageShell
       eyebrow="Overview"
       title="Dashboard"
-      subtitle="Quick snapshot of your week. (MVP UI — will be wired to API later.)"
-      right={(
-        <Link
-          to="/fridge"
-          className="inline-flex items-center gap-2 bg-[#1e3d2a] text-white text-sm font-medium px-5 py-2.5 rounded-full hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150"
-        >
-          Open fridge →
-        </Link>
-      )}
+      subtitle="Quick snapshot of your week."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <StatCard label="Expiring soon" value="3" hint="Use these first" />
@@ -54,7 +46,7 @@ export default function DashboardPage() {
               to="/profile"
               className="px-4 py-3 rounded-xl border border-[#cce4d6] hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all text-sm text-[#2d4a38]"
             >
-              Set your weekly budget
+              My Profile
             </Link>
           </div>
         </div>
