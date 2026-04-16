@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 import os
 from werkzeug.utils import secure_filename
-from modules.receipt.ocr import process_receipt
 
-receipt_bp = Blueprint("receipt_bp", __name__, url_prefix="/api/receipts")
+from modules.receipt.ocr import process_receipt
+from modules.receipt.service import save_receipt_items
+
+receipt_bp = Blueprint("receipt_bp", __name__)
 
 UPLOAD_FOLDER = "uploads"
 
@@ -24,13 +26,18 @@ def upload_receipt():
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
-    result = process_receipt(filepath, known_items_csv=None)
+    try:
+        items = process_receipt(filepath)
+        print("OCR ITEMS:", items)
 
-    return jsonify({
-        "message": "File uploaded successfully",
-        "filename": filename,
-        "filepath": filepath,
-        "cleaned_names": result["cleaned_names"],
-        "raw_text": result["raw_text"],
-        "raw_lines": result["raw_lines"],
-    }), 200
+        saved_items = save_receipt_items(items, filename, filepath)
+        print("SAVED ITEMS:", saved_items)
+
+        return jsonify({
+            "message": "Receipt uploaded and items saved successfully",
+            "items": saved_items
+        }), 200
+
+    except Exception as e:
+        print("UPLOAD ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
