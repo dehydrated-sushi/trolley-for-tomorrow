@@ -1,5 +1,31 @@
 # Core Changelog
 
+## [1.1.0] - 2026-04-16
+
+### Changed
+- CORS configuration in app.py changed from wildcard `origins="*"` to config-based `origins=Config.CORS_ORIGINS`, which reads allowed origins from the CORS_ORIGINS environment variable
+- Rate limiter from security/rate_limiter.py now initialised in app.py create_app() via `limiter.init_app(app)`
+- JWT error handlers from security/jwt_handlers.py now registered in app.py create_app() via `register_jwt_error_handlers()`
+- routes/recipe_routes.py migrated from raw sqlite3 (get_db_connection) to SQLAlchemy db.session.execute with sqlalchemy.text
+- modules/fridge/routes.py migrated from raw sqlite3 to SQLAlchemy db.session.execute with sqlalchemy.text
+- modules/meal_plan/routes.py migrated from raw sqlite3 to SQLAlchemy db.session.execute with sqlalchemy.text
+- modules/receipt/service.py migrated from raw sqlite3 INSERTs to SQLAlchemy ORM using the existing ReceiptItem model from modules/receipt/schema.py
+- test_health.py updated to assert {"status": "healthy"} matching the current app.py response
+
+### Removed
+- Deleted legacy backend/db.py which provided raw sqlite3 connections via get_db_connection(). All database access now goes through the shared SQLAlchemy instance in core/database.py
+
+### Added
+- Flask-Limiter==3.12 added to requirements.txt
+- core/README.md with documentation for config.py, database.py, auth.py, and errors.py
+- security/README.md with usage examples for jwt_handlers.py, rate_limiter.py, and sanitiser.py
+- backend/README.md with setup instructions, environment variables, running tests, project structure, and module guide
+
+### Notes
+- The database is now unified: all routes use SQLAlchemy (core.database.db) exclusively
+- Raw sqlite3 `?` positional parameters were replaced with SQLAlchemy `:named` parameters
+- `dict(row)` calls were replaced with `dict(row._mapping)` for SQLAlchemy Row objects
+
 ## [1.0.0] - 2026-04-02
 
 ### Added

@@ -1,12 +1,13 @@
 from flask import Blueprint, jsonify
-from db import get_db_connection
+from core.database import db
+from sqlalchemy import text
 import ast
 
 bp = Blueprint("meal_plan_bp", __name__, url_prefix="/api/meals")
 
 
-def normalize_text(text):
-    return str(text).strip().lower()
+def normalize_text(value):
+    return str(value).strip().lower()
 
 
 def ingredient_matches(recipe_ingredient, available_items):
@@ -30,34 +31,29 @@ def ingredient_matches(recipe_ingredient, available_items):
 @bp.route("/recommendations", methods=["GET"])
 def get_meal_recommendations():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # get scanned items from receipt_items
-        cursor.execute("""
+        fridge_result = db.session.execute(text("""
             SELECT DISTINCT name
             FROM receipt_items
             WHERE name IS NOT NULL AND TRIM(name) != ''
-        """)
-        fridge_rows = cursor.fetchall()
-        available_items = {normalize_text(row["name"]) for row in fridge_rows}
+        """))
+        available_items = {normalize_text(row._mapping["name"]) for row in fridge_result}
 
         # get recipes from recipes dataset table
-        cursor.execute("""
+        recipe_result = db.session.execute(text("""
             SELECT id, name, ingredients_clean, steps_clean, calories
             FROM recipes
-        """)
-        recipe_rows = cursor.fetchall()
-        conn.close()
+        """))
 
         recommendations = []
 
-        for row in recipe_rows:
-            recipe_id = row["id"]
-            recipe_name = row["name"]
-            ingredients_raw = row["ingredients_clean"]
-            steps_raw = row["steps_clean"]
-            calories = row["calories"]
+        for row in recipe_result:
+            mapping = row._mapping
+            recipe_id = mapping["id"]
+            recipe_name = mapping["name"]
+            ingredients_raw = mapping["ingredients_clean"]
+            steps_raw = mapping["steps_clean"]
+            calories = mapping["calories"]
 
             try:
                 ingredients = ast.literal_eval(ingredients_raw) if ingredients_raw else []

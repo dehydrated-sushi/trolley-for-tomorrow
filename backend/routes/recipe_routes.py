@@ -1,26 +1,23 @@
 from flask import Blueprint, request, jsonify
-from db import get_db_connection
+from core.database import db
+from sqlalchemy import text
 
 recipe_bp = Blueprint("recipe_bp", __name__, url_prefix="/api/recipes")
 
 
 @recipe_bp.route("/", methods=["GET"])
 def get_recipes():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     limit = request.args.get("limit", 20, type=int)
 
-    cursor.execute("""
+    result = db.session.execute(text("""
         SELECT id, name, minutes, n_ingredients, calories, protein
         FROM recipes
-        LIMIT ?
-    """, (limit,))
+        LIMIT :limit
+    """), {"limit": limit})
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = [dict(row._mapping) for row in result]
 
-    return jsonify([dict(row) for row in rows]), 200
+    return jsonify(rows), 200
 
 
 @recipe_bp.route("/search", methods=["GET"])
@@ -30,37 +27,29 @@ def search_recipes():
     if not ingredient:
         return jsonify({"error": "ingredient query is required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
+    result = db.session.execute(text("""
         SELECT id, name, minutes, n_ingredients, ingredients_clean
         FROM recipes
-        WHERE ingredients_clean LIKE ?
+        WHERE ingredients_clean LIKE :pattern
         LIMIT 50
-    """, (f"%{ingredient}%",))
+    """), {"pattern": f"%{ingredient}%"})
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = [dict(row._mapping) for row in result]
 
-    return jsonify([dict(row) for row in rows]), 200
+    return jsonify(rows), 200
 
 
 @recipe_bp.route("/<int:recipe_id>", methods=["GET"])
 def get_recipe_by_id(recipe_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
+    result = db.session.execute(text("""
         SELECT *
         FROM recipes
-        WHERE id = ?
-    """, (recipe_id,))
+        WHERE id = :recipe_id
+    """), {"recipe_id": recipe_id})
 
-    row = cursor.fetchone()
-    conn.close()
+    row = result.fetchone()
 
     if row is None:
         return jsonify({"error": "Recipe not found"}), 404
 
-    return jsonify(dict(row)), 200
+    return jsonify(dict(row._mapping)), 200

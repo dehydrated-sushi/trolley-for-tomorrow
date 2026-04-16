@@ -1,10 +1,8 @@
-from db import get_db_connection
+from core.database import db
+from modules.receipt.schema import ReceiptItem
 
 
 def save_receipt_items(items, receipt_filename, receipt_path):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     saved_items = []
 
     for item in items:
@@ -15,19 +13,19 @@ def save_receipt_items(items, receipt_filename, receipt_path):
         qty = item.get("qty", 1)
         price = item.get("price", None)
 
-        
         try:
             price = float(price) if price not in [None, ""] else None
         except Exception:
             price = None
 
-        cursor.execute(
-            """
-            INSERT INTO receipt_items (receipt_filename, receipt_path, name, qty, price)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (receipt_filename, receipt_path, name, qty, price)
+        receipt_item = ReceiptItem(
+            receipt_filename=receipt_filename,
+            receipt_path=receipt_path,
+            name=name,
+            qty=qty,
+            price=price,
         )
+        db.session.add(receipt_item)
 
         saved_items.append({
             "name": name,
@@ -35,7 +33,6 @@ def save_receipt_items(items, receipt_filename, receipt_path):
             "price": price
         })
 
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
     return saved_items

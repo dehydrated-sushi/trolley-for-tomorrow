@@ -10,6 +10,8 @@ from core.auth import jwt
 from core.config import Config
 from core.database import db
 from core.errors import register_error_handlers
+from security.jwt_handlers import register_jwt_error_handlers
+from security.rate_limiter import limiter
 from routes.test_routes import test_bp
 from routes.receipt_routes import receipt_bp
 from routes.recipe_routes import recipe_bp
@@ -22,11 +24,13 @@ def create_app():
     # Initialise extensions
     db.init_app(app)
     jwt.init_app(app)
+    limiter.init_app(app)
     Bcrypt(app)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, origins=Config.CORS_ORIGINS)
 
     # Register error handlers
     register_error_handlers(app)
+    register_jwt_error_handlers()
 
     # Register blueprints
     app.register_blueprint(test_bp)
