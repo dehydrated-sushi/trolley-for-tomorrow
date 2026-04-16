@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE } from '../../lib/api'
 
 export default function UploadReceiptPage() {
   const [file, setFile] = useState(null)
@@ -27,7 +28,7 @@ export default function UploadReceiptPage() {
       setMessage('')
       setResponseData(null)
 
-      const response = await fetch('http://127.0.0.1:5000/api/receipts/upload', {
+      const response = await fetch(`${API_BASE}/api/receipts/upload`, {
         method: 'POST',
         body: formData,
       })
@@ -38,8 +39,6 @@ export default function UploadReceiptPage() {
       } catch {
         data = {}
       }
-
-      console.log('Backend response:', data)
 
       if (!response.ok) {
         setMessage(data.error || `Upload failed. Status: ${response.status}`)
@@ -109,57 +108,39 @@ export default function UploadReceiptPage() {
         </p>
       )}
 
-      {message && (
-        <p style={{ marginTop: '1rem' }}>
-          {message}
-        </p>
-      )}
+      {message && <p style={{ marginTop: '1rem' }}>{message}</p>}
 
-      {responseData && (
+      {responseData?.items?.length > 0 && (
         <div style={{ marginTop: '1.5rem' }}>
-          <p><strong>Filename:</strong> {responseData.filename || 'Not returned by backend'}</p>
-          <p><strong>Saved path:</strong> {responseData.filepath || 'Not returned by backend'}</p>
-        </div>
-      )}
-
-      {responseData?.raw_lines && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h3>OCR Lines</h3>
-          {responseData.raw_lines.map((line, index) => (
-            <p key={index}>{line}</p>
-          ))}
-        </div>
-      )}
-
-      {responseData?.raw_text && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h3>Raw OCR Text</h3>
-          <pre
+          <h3>Saved Items</h3>
+          <table
             style={{
-              whiteSpace: 'pre-wrap',
+              width: '100%',
+              borderCollapse: 'collapse',
               background: '#0b3d27',
-              padding: '12px',
               borderRadius: '8px',
+              overflow: 'hidden',
             }}
           >
-            {responseData.raw_text}
-          </pre>
-        </div>
-      )}
-
-      {responseData && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h3>Debug Response</h3>
-          <pre
-            style={{
-              whiteSpace: 'pre-wrap',
-              background: '#0b3d27',
-              padding: '12px',
-              borderRadius: '8px',
-            }}
-          >
-            {JSON.stringify(responseData, null, 2)}
-          </pre>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '10px' }}>Name</th>
+                <th style={{ textAlign: 'left', padding: '10px' }}>Qty</th>
+                <th style={{ textAlign: 'left', padding: '10px' }}>Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {responseData.items.map((item, index) => (
+                <tr key={`${item.name}-${index}`}>
+                  <td style={{ padding: '10px', borderTop: '1px solid #1b5a3d' }}>{item.name}</td>
+                  <td style={{ padding: '10px', borderTop: '1px solid #1b5a3d' }}>{item.qty ?? 1}</td>
+                  <td style={{ padding: '10px', borderTop: '1px solid #1b5a3d' }}>
+                    {item.price != null ? `$${item.price}` : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
