@@ -10,8 +10,9 @@ from core.auth import jwt
 from core.config import Config
 from core.database import db
 from core.errors import register_error_handlers
-from security.jwt import register_jwt_error_handlers
-from security.rate_limiter import limiter
+from routes.test_routes import test_bp
+from routes.receipt_routes import receipt_bp
+from routes.recipe_routes import recipe_bp
 
 
 def create_app():
@@ -21,17 +22,16 @@ def create_app():
     # Initialise extensions
     db.init_app(app)
     jwt.init_app(app)
-    limiter.init_app(app)
     Bcrypt(app)
-    CORS(app, origins=Config.CORS_ORIGINS)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Register error handlers
     register_error_handlers(app)
-    register_jwt_error_handlers()
 
-    # Register test blueprint
+    # Register blueprints
     app.register_blueprint(test_bp)
     app.register_blueprint(receipt_bp, url_prefix="/api/receipts")
+    app.register_blueprint(recipe_bp)
 
     # Auto-discover and register module blueprints
     modules_dir = os.path.join(os.path.dirname(__file__), "modules")
@@ -39,7 +39,6 @@ def create_app():
         module = importlib.import_module(f"modules.{module_info.name}.routes")
         if hasattr(module, "bp"):
             app.register_blueprint(module.bp)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Basic routes
     @app.route("/", methods=["GET"])
@@ -51,7 +50,7 @@ def create_app():
 
     @app.route("/health", methods=["GET"])
     def health():
-        return jsonify({"status": "ok"}), 200
+        return jsonify({"status": "healthy"}), 200
 
     @app.route("/api/health", methods=["GET"])
     def api_health():
@@ -71,5 +70,7 @@ def create_app():
     return app
 
 
+app = create_app()
+
 if __name__ == "__main__":
-    create_app().run(debug=os.environ.get("FLASK_ENV") == "development")
+    app.run(debug=os.environ.get("FLASK_ENV") == "development")
