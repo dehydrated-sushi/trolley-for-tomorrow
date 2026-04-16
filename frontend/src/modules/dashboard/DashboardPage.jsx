@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import PageShell from '../../shared/PageShell'
+import { apiFetch } from '../../lib/api'
 
 function StatCard({ label, value, hint }) {
   return (
@@ -12,6 +14,30 @@ function StatCard({ label, value, hint }) {
 }
 
 export default function DashboardPage() {
+  const [budget, setBudget] = useState(0)
+  const [expiringSoon, setExpiringSoon] = useState(0)
+  const [mealsPlanned, setMealsPlanned] = useState(0)
+
+  useEffect(() => {
+    const savedBudget = Number(localStorage.getItem('dashboard_budget') || 0)
+    const savedMealsPlanned = Number(localStorage.getItem('dashboard_mealsPlanned') || 0)
+
+    setBudget(savedBudget)
+    setMealsPlanned(savedMealsPlanned)
+
+    async function loadFridge() {
+      try {
+        const data = await apiFetch('/api/fridge/items')
+        const items = data.items || []
+        setExpiringSoon(items.length)
+      } catch {
+        setExpiringSoon(0)
+      }
+    }
+
+    loadFridge()
+  }, [])
+
   return (
     <PageShell
       eyebrow="Overview"
@@ -19,9 +45,9 @@ export default function DashboardPage() {
       subtitle="Quick snapshot of your week."
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Expiring soon" value={expiringSoon} hint="Use these first" />
+        <StatCard label="Fridge items" value={expiringSoon} hint="Imported from receipts" />
         <StatCard label="Budget remaining" value={`$${budget.toFixed(2)}`} hint="This week" />
-        <StatCard label="Meals planned" value={mealsPlanned} hint="Generate a plan" />
+        <StatCard label="Meals planned" value={mealsPlanned} hint="Generated meals" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -31,16 +57,22 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col gap-2">
             <Link
+              to="/upload-receipt"
+              className="px-4 py-3 rounded-xl border border-[#cce4d6] hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all text-sm text-[#2d4a38]"
+            >
+              Upload a new receipt
+            </Link>
+            <Link
+              to="/fridge"
+              className="px-4 py-3 rounded-xl border border-[#cce4d6] hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all text-sm text-[#2d4a38]"
+            >
+              View fridge items
+            </Link>
+            <Link
               to="/meals"
               className="px-4 py-3 rounded-xl border border-[#cce4d6] hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all text-sm text-[#2d4a38]"
             >
-              Generate a meal plan for this week
-            </Link>
-            <Link
-              to="/shopping"
-              className="px-4 py-3 rounded-xl border border-[#cce4d6] hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all text-sm text-[#2d4a38]"
-            >
-              Review your shopping list
+              Generate meal recommendations
             </Link>
             <Link
               to="/profile"
@@ -56,11 +88,10 @@ export default function DashboardPage() {
             Activity
           </div>
           <div className="text-sm text-[#5a7a68] font-light">
-            No activity yet. Add items to your fridge or generate meals to start seeing insights here.
+            Upload receipts to populate your fridge, then use those items to get meal recommendations.
           </div>
         </div>
       </div>
     </PageShell>
   )
 }
-
