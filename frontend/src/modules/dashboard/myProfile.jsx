@@ -18,7 +18,7 @@ function addActivity(message) {
   localStorage.setItem('dashboard_activity', JSON.stringify(next))
 }
 
-export default function ProfileForm() {
+export default function ProfilePage() {
   const navigate = useNavigate()
 
   const [budgetInput, setBudgetInput] = useState('42.10')
