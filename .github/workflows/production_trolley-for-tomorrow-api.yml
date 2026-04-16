@@ -73,5 +73,5 @@ jobs:
         with:
           app-name: 'trolley-for-tomorrow-api'
           slot-name: 'Production'
-          startup-command: 'cd backend && gunicorn --bind=0.0.0.0 --timeout 600 "app:create_app()"'
+          startup-command: 'bash backend/startup.sh'
           
