@@ -97,7 +97,7 @@ export default function Dashboard() {
                 What's in my fridge?
               </h2>
               <p className="text-sm text-white/55 font-light mb-4 leading-relaxed">
-                Scan your receipt and let NutriPlan generate zero-waste meal plans instantly.
+                Scan your receipt and let Trolley for Tomorrow generate zero-waste meal plans instantly.
               </p>
               <Link
                 to="/scan"

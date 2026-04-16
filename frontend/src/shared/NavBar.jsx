@@ -1,22 +1,31 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from './AuthContext'
 
 const NAV_LINKS = [
-  { label: 'Dashboard',      to: '/dashboard' },
-  { label: 'Your Meals',     to: '/meals'     },
-  { label: 'Fridge',         to: '/fridge'    },
-  { label: 'Shopping List',  to: '/shopping'  },
+  { label: 'Dashboard',     to: '/dashboard' },
+  { label: 'Your Meals',    to: '/meals'     },
+  { label: 'Fridge',        to: '/fridge'    },
+  { label: 'Shopping List', to: '/shopping'  },
 ]
 
 export default function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const location = useLocation()
+  const location  = useLocation()
+  const navigate  = useNavigate()
+  const { isLoggedIn, logout } = useAuth()
 
   const isActive = (path) => location.pathname === path
 
+  const handleLogout = () => {
+    logout()
+    setMenuOpen(false)
+    navigate('/')
+  }
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0c1f14]/97 backdrop-blur-md border-b border-white/5">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 lg:px-14">
+      <div className="w-full px-4 md:px-8 lg:px-14">
         <div className="flex items-center h-16 gap-4">
 
           {/* Logo */}
@@ -26,39 +35,58 @@ export default function NavBar() {
             </span>
           </Link>
 
-          {/* Desktop nav links */}
-          <div className="hidden lg:flex items-center gap-1 ml-8">
-            {NAV_LINKS.map(({ label, to }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`
-                  px-3 py-1.5 rounded-lg text-sm transition-all duration-150
-                  ${isActive(to)
-                    ? 'text-white bg-white/10'
-                    : 'text-white/45 hover:text-white hover:bg-white/6'
-                  }
-                `}
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
+          {/* Desktop nav links — only shown when logged in */}
+          {isLoggedIn && (
+            <div className="hidden lg:flex items-center gap-1 ml-8">
+              {NAV_LINKS.map(({ label, to }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-150
+                    ${isActive(to)
+                      ? 'text-white bg-white/10'
+                      : 'text-white/45 hover:text-white hover:bg-white/6'
+                    }`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* Desktop right buttons */}
           <div className="hidden lg:flex items-center gap-2 ml-auto">
-            <Link
-              to="/login"
-              className="text-sm text-white/65 px-4 py-2 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all duration-150"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/signup"
-              className="text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-5 py-2 rounded-full hover:bg-[#8dcca0] transition-all duration-150 hover:-translate-y-px"
-            >
-              Sign up free
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link
+                  to="/profile"
+                  className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5cad76] to-[#3e7a52] flex items-center justify-center text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                >
+                  J
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-white/65 px-4 py-2 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all duration-150"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-sm text-white/65 px-4 py-2 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all duration-150"
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/signup"
+                  className="text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-5 py-2 rounded-full hover:bg-[#8dcca0] transition-all duration-150 hover:-translate-y-px"
+                >
+                  Sign up free
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -75,21 +103,21 @@ export default function NavBar() {
         </div>
       </div>
 
-      {/* Mobile dropdown menu */}
+      {/* Mobile dropdown */}
       <div className={`lg:hidden overflow-hidden transition-all duration-300 ${menuOpen ? 'max-h-96' : 'max-h-0'}`}>
         <div className="px-4 pb-4 flex flex-col gap-1 border-t border-white/6">
-          {NAV_LINKS.map(({ label, to }) => (
+
+          {/* Nav links — only when logged in */}
+          {isLoggedIn && NAV_LINKS.map(({ label, to }) => (
             <Link
               key={to}
               to={to}
               onClick={() => setMenuOpen(false)}
-              className={`
-                px-4 py-3 rounded-lg text-sm transition-all duration-150
+              className={`px-4 py-3 rounded-lg text-sm transition-all duration-150
                 ${isActive(to)
                   ? 'text-white bg-white/10'
                   : 'text-white/55 hover:text-white hover:bg-white/6'
-                }
-              `}
+                }`}
             >
               {label}
             </Link>
@@ -97,20 +125,40 @@ export default function NavBar() {
 
           {/* Mobile auth buttons */}
           <div className="flex gap-2 mt-3 pt-3 border-t border-white/6">
-            <Link
-              to="/login"
-              onClick={() => setMenuOpen(false)}
-              className="flex-1 text-center text-sm text-white/65 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/signup"
-              onClick={() => setMenuOpen(false)}
-              className="flex-1 text-center text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-4 py-2.5 rounded-full hover:bg-[#8dcca0] transition-all"
-            >
-              Sign up free
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link
+                  to="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex-1 text-center text-sm text-white/65 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
+                >
+                  My Profile
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 text-center text-sm text-white/65 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex-1 text-center text-sm text-white/65 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex-1 text-center text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-4 py-2.5 rounded-full hover:bg-[#8dcca0] transition-all"
+                >
+                  Sign up free
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
