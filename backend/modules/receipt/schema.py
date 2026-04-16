@@ -10,7 +10,7 @@ class ReceiptItem(db.Model):
     receipt_path = db.Column(db.String(500), nullable=False)
 
     name = db.Column(db.String(255), nullable=False)
-    qty = db.Column(db.Integer, nullable=False, default=1)
+    qty = db.Column(db.String(50), nullable=False, default="1")
     price = db.Column(db.Float, nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
