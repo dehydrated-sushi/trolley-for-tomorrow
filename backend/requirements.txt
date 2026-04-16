@@ -10,8 +10,6 @@ Flask-Limiter==3.12
 pytest==8.3.5
 pytesseract
 Pillow
-opencv-python
 pandas
 rapidfuzz
-matplotlib
 numpy
