@@ -16,13 +16,13 @@ export default function NavBar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0c1f14]/97 backdrop-blur-md border-b border-white/5">
-      <div className="w-full px-4 md:px-8 lg:px-14">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 lg:px-14">
         <div className="flex items-center h-16 gap-4">
 
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
             <span className="font-serif text-[19px] text-white tracking-tight">
-              Nutri<span className="text-[#5cad76]">Plan</span>
+              Trolley<span className="text-[#5cad76]"> for Tomorrow</span>
             </span>
           </Link>
 
