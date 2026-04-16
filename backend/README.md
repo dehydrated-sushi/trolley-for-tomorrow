@@ -23,10 +23,17 @@ cp .env.example .env
 | Variable | What it is |
 |----------|-----------|
 | `SECRET_KEY` | Flask session signing key. Use a long random string |
-| `DATABASE_URL` | PostgreSQL connection string (see Database Setup below) |
+| `DATABASE_URL` | Database connection string (see Database Setup below) |
 | `JWT_SECRET_KEY` | Signing key for auth tokens. Different from SECRET_KEY |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | How long a login token lasts. Default 30 |
 | `CORS_ORIGINS` | Comma-separated frontend URLs allowed to call the API |
+
+## Database Setup
+
+- The app uses `instance/food_app.db` for local development (`DATABASE_URL=sqlite:///food_app.db` in `.env`)
+- `food_app.db` is not committed to git due to file size (217MB). It contains 231,636 recipes, 14,851 known ingredients, and the receipt_items table
+- Contact Das to obtain the database file for local setup
+- Place the file at `backend/instance/food_app.db`
 
 ## Running
 
