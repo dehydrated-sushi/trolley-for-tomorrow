@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const NAV_LINKS = [
-  { label: 'DashboardPage', to: '/dashboardPage' },
+  { label: 'Dashboard', to: '/dashboard' },
+  { label: 'Upload Receipt', to: '/upload-receipt' },
   { label: 'Fridge', to: '/fridge' },
   { label: 'Your Meals', to: '/meals' },
   { label: 'Shopping List', to: '/shopping' },
