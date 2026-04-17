@@ -3,6 +3,7 @@ import IngredientList from './IngredientList'
 import IngredientForm from './IngredientForm'
 import CookingMethodPanel from './CookingMethodPanel'
 import ConfirmDialog from '../../shared/ConfirmDialog'
+import { Link } from 'react-router-dom'
 
 const FILTER_OPTIONS = [
   { key: 'all',      label: 'All'      },
@@ -62,6 +63,16 @@ export default function FridgeView() {
               )}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+  <Link
+    to="/scan"
+    className="inline-flex items-center gap-2 bg-white border border-[#cce4d6] text-[#2d4a38] text-sm font-medium px-4 py-2.5 rounded-full hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all duration-150"
+  >
+    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" />
+    </svg>
+    Scan receipt
+  </Link>
           <button
             onClick={() => setEditingItem({})}
             className="inline-flex items-center gap-2 bg-[#1e3d2a] text-white text-sm font-medium px-5 py-2.5 rounded-full hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150"
@@ -69,6 +80,7 @@ export default function FridgeView() {
             <span className="text-lg leading-none">+</span>
             Add item
           </button>
+        </div>
         </div>
 
         {/* ── Expiry warning banner ── */}

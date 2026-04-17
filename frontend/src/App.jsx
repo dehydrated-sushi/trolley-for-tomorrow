@@ -11,7 +11,7 @@ import ShoppingList from './modules/shopping_list/Shoppinglist'
 import LoginPage from './modules/auth/LoginPage'
 import SignupPage from './modules/auth/SignupPage'
 import Dashboard from './modules/dashboard/dashboard'
-// import ReceiptScanner from './modules/receipt/ReceiptScanner'
+import ReceiptScanner from './modules/receipt/ReceiptScanner'
 
 function AppRoutes() {
   return (
@@ -31,7 +31,7 @@ function AppRoutes() {
         <Route path="/meals"     element={<ProtectedRoute><YourMeals /></ProtectedRoute>} />
         <Route path="/profile"   element={<ProtectedRoute><ProfileForm /></ProtectedRoute>} />
         <Route path="/shopping"  element={<ProtectedRoute><ShoppingList /></ProtectedRoute>} />
-        {/* <Route path="/scan"      element={<ProtectedRoute><ReceiptScanner /></ProtectedRoute>} /> */}
+        <Route path="/scan"      element={<ProtectedRoute><ReceiptScanner /></ProtectedRoute>} />
       </Routes>
     </>
   )

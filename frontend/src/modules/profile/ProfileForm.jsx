@@ -46,9 +46,7 @@ export default function ProfileForm() {
             <div className="text-sm text-[#5a7a68] mt-0.5">{USER.email}</div>
             <div className="text-xs text-[#5a7a68] mt-0.5">{USER.location}</div>
           </div>
-          <button className="text-xs text-[#5a7a68] border border-[#cce4d6] rounded-lg px-3 py-1.5 hover:bg-[#f4fbf6] hover:border-[#5cad76] transition-all flex-shrink-0">
-            Edit
-          </button>
+          
         </div>
 
         {/* ── Budget section ── */}
