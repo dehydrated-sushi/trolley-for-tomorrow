@@ -137,7 +137,7 @@ export default function IngredientForm({ initial, onSave, onClose }) {
           </div>
 
           {/* Expiry date */}
-          <div>
+          <div lang="en">
             <label className="block text-xs font-medium text-[#2d4a38] mb-1.5">
               Expiry date <span className="text-[#5a7a68] font-normal">(optional)</span>
             </label>
