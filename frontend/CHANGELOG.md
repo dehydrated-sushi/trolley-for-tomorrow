@@ -5,6 +5,58 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.4.0] — 2026-04-23
+
+### Changed — Receipt upload page overhauled (copy, validation, animations)
+
+**Module:** `frontend/src/modules/receipt`
+
+- **Copy refresh.** All user-facing "OCR" jargon removed across the page (subtitle, step 2 in "How it works", warning panel). Page title changed from "New Receipt." to **"Upload a receipt"**. Subtitle rewritten to *"Drop in a photo of your grocery receipt and we'll pull out the items. You review and confirm before anything hits your fridge."* File-types hint dropped the false "PNG, JPG, or PDF from any Australian retailer" claim and now reads *"PNG or JPG. A clear, well-lit photo works best."* (backend does not support PDFs; no `pdf2image` in `backend/requirements.txt`). Warning panel flipped from the apologetic "OCR isn't perfect" to the proactive **"You have the final say"**.
+- **Scan button is context-aware.** Label now reads "Choose a file first" when no file is selected, "Scan receipt" when ready, and "Scanning receipt..." during OCR.
+- **Discard button.** The header action renamed from generic "Cancel" to **"Discard draft"** and is now only rendered during the `review` phase (it made no sense in idle/parsing/committing). "View fridge →" still shows on `done`.
+
+### Added — Drag-and-drop, client-side validation, thumbnail preview
+
+**Module:** `frontend/src/modules/receipt`
+
+- Drag-and-drop handlers wired to the drop zone (`onDragEnter`, `onDragOver`, `onDragLeave`, `onDrop`). The zone's "Drop your receipt here" copy is no longer false advertising.
+- Client-side file validation via a new `applyFile()` helper: accepts `image/*` MIME types only; caps size at 10 MB. Friendly error messages ("That doesn't look like a photo…", "That file is X.X MB…") surface in the existing status banner.
+- `<input accept="image/*" capture="environment">` — removed `.pdf` (matches updated copy), added `capture` hint so mobile devices offer the rear camera.
+- File preview thumbnail (160×160) via `URL.createObjectURL(file)`, managed through a `useEffect` that cleans up with `URL.revokeObjectURL` on unmount/change so there are no memory leaks.
+- `×` remove button on the thumbnail to clear the file and reset state.
+
+### Added — Animations (all tied to real state, no theatre)
+
+**Module:** `frontend/src/modules/receipt`
+
+- Drop zone scales 1.01 with a spring and border flips from dashed outline-variant to solid primary when a file is dragged over.
+- Three content states (empty / dragging / file-selected) cross-fade via `AnimatePresence mode="wait"`.
+- Scanning-line overlay on the user's actual receipt thumbnail during `parsing` phase — emerald gradient line sweeps top-to-bottom (1.4s loop) with a 14px glow and a 10%-primary tint. Reuses the visual language of HeroDemo but applied to the user's own photo.
+- Scan button pulses (`scale 1 → 1.04 → 1`) the moment the file state becomes valid. Fired imperatively inside `applyFile()` via `useAnimation()` controls — it responds to a real state change, not a timer.
+- Review-table rows stagger in when the review phase mounts (scale 0.97 → 1, y 8 → 0, 60ms per row).
+- `×` remove-button icon rotates 90° on hover (scoped `group/remove` so it doesn't collide with the outer drop-zone `group`).
+- Discard button tints red on hover via the existing `error-container` / `error` MD3 tokens.
+
+### Changed — Dashboard copy (for wording consistency with receipt page)
+
+**Module:** `frontend/src/modules/dashboard`
+
+- "How it works" step 2 on the dashboard sidebar: "OCR scans and adds items to your fridge" → **"We read the items and add them to your fridge"**. No other dashboard changes.
+
+### Removed — Orphaned profile files carrying fake data
+
+**Module:** `frontend/src/modules/profile`
+
+- Deleted `useBudget.jsx` — contained hardcoded `spent = 84.60` mock value and was never imported.
+- Deleted `ProfileForm.jsx` — contained hardcoded `'Karl Wang'` / `'karl@example.com'` / `'42.10'` defaults, used `localStorage` instead of the API, and was not routed in `App.jsx` (the `/profile` route points to `dashboard/myProfile.jsx`). Both deletions verified safe with a grep for active imports across `frontend/src/`.
+
+### Notes for maintainers
+
+- An attempt to add framer-motion animations to Dashboard, Fridge, Meals, Shopping, and MyProfile was reverted after the Dashboard bento grid rendered invisibly. Cause: `motion.create(Link)` with parent `variants={stagger}` and child `variants={riseIn}` — cards stayed in the `hidden` state (opacity 0). The same pattern works on HomePage, so the specific trigger is unclear. Before retrying that pattern anywhere, test locally on a single card first, or wrap a regular `<Link>` inside a `<motion.div>` rather than converting the Link itself.
+- The Receipt page scan-line animation is **tied to the real `phase === 'parsing'` state** only. When the backend responds, the overlay disappears. There is no fake progress bar, no `setTimeout`-driven phase rotation, and no fabricated percentages on this page.
+
+---
+
 ## [1.3.0] — 2026-04-22
 
 ### Added — Shared modal components

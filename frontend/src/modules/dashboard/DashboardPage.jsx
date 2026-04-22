@@ -79,7 +79,10 @@ export default function DashboardPage() {
 
       {/* Bento Grid: fridge, meals, receipt, budget */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <Link to="/fridge" className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group">
+        <Link
+          to="/fridge"
+          className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group block"
+        >
           <div className="flex justify-between items-start mb-4">
             <div className="p-3 bg-secondary-container rounded-2xl">
               <span className="material-symbols-outlined text-on-secondary-container">kitchen</span>
@@ -94,7 +97,10 @@ export default function DashboardPage() {
           </span>
         </Link>
 
-        <Link to="/meals" className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group">
+        <Link
+          to="/meals"
+          className="bg-surface-container-lowest p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group"
+        >
           <div className="flex justify-between items-start mb-4">
             <div className="p-3 bg-tertiary-container/20 rounded-2xl">
               <span className="material-symbols-outlined text-tertiary">restaurant_menu</span>
@@ -109,7 +115,10 @@ export default function DashboardPage() {
           </span>
         </Link>
 
-        <Link to="/upload-receipt" className="bg-surface-container-low p-6 rounded-[2rem] border border-outline-variant/15 flex flex-col justify-between group hover:shadow-md transition-shadow">
+        <Link
+          to="/upload-receipt"
+          className="bg-surface-container-low p-6 rounded-[2rem] border border-outline-variant/15 flex flex-col justify-between group hover:shadow-md transition-shadow"
+        >
           <div>
             <div className="p-3 bg-primary/10 rounded-2xl inline-block mb-4">
               <span className="material-symbols-outlined text-primary">receipt_long</span>
@@ -260,7 +269,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-start gap-3">
                 <span className="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                <p>OCR scans and adds items to your fridge</p>
+                <p>We read the items and add them to your fridge</p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>

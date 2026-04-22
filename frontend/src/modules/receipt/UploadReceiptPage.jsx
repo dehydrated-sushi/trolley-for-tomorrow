@@ -1,10 +1,14 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { motion, AnimatePresence, useAnimation } from 'framer-motion'
 import { API_BASE } from '../../lib/api'
 
 // Phases: 'idle' (no file picked), 'parsing' (OCR running), 'review'
 // (editable draft shown), 'committing' (saving), 'done' (committed).
 // There is also 'error' at any point.
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const EASE = [0.22, 1, 0.36, 1]
 
 function blankRow() {
   return { name: '', qty: '1', price: '', _local: Math.random().toString(36).slice(2) }
@@ -13,26 +17,95 @@ function blankRow() {
 export default function UploadReceiptPage() {
   const fileInputRef = useRef(null)
   const [file, setFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [phase, setPhase] = useState('idle')
   const [message, setMessage] = useState('')
   const [isError, setIsError] = useState(false)
   const [draft, setDraft] = useState([]) // editable item rows
   const [sourceFilename, setSourceFilename] = useState('')
   const [committedCount, setCommittedCount] = useState(0)
+  const scanBtnControls = useAnimation()
 
   const setMsg = (txt, err = false) => {
     setMessage(txt)
     setIsError(err)
   }
 
-  // --- File selection ---
-  const handleFileChange = (e) => {
-    const selected = e.target.files?.[0] || null
+  // Manage preview-image object URL lifecycle.
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  // --- File selection + validation ---
+  const applyFile = (selected) => {
+    if (!selected) return
+    if (!selected.type.startsWith('image/')) {
+      setMsg("That doesn't look like a photo. Upload a PNG or JPG.", true)
+      return
+    }
+    if (selected.size > MAX_FILE_SIZE) {
+      setMsg(
+        `That file is ${(selected.size / 1024 / 1024).toFixed(1)} MB. Try a smaller photo (under 10 MB).`,
+        true,
+      )
+      return
+    }
     setFile(selected)
     setDraft([])
     setMsg('')
-    setPhase(selected ? 'idle' : 'idle')
+    setPhase('idle')
     setCommittedCount(0)
+    // Scan button just went from disabled to enabled — pulse it so the user
+    // notices. Real state change, not fake progress.
+    scanBtnControls.start({
+      scale: [1, 1.04, 1],
+      transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    })
+  }
+
+  const handleFileChange = (e) => {
+    applyFile(e.target.files?.[0] || null)
+  }
+
+  const handleRemoveFile = (e) => {
+    e.stopPropagation()
+    setFile(null)
+    setDraft([])
+    setMsg('')
+    setPhase('idle')
+    setCommittedCount(0)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // --- Drag and drop ---
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (phase === 'parsing') return
+    setIsDraggingOver(true)
+  }
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingOver(false)
+  }
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingOver(false)
+    if (phase === 'parsing') return
+    applyFile(e.dataTransfer.files?.[0] || null)
   }
 
   // --- Step 1: parse (OCR) ---
@@ -158,20 +231,21 @@ export default function UploadReceiptPage() {
       {/* Header */}
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight">New Receipt.</h1>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight">Upload a receipt</h1>
           <p className="text-on-surface-variant mt-2 max-w-lg text-lg">
-            Upload a receipt photo — we&apos;ll read it with OCR, then you review and confirm before anything hits your fridge.
+            Drop in a photo of your grocery receipt and we&apos;ll pull out the items. You review and confirm before anything hits your fridge.
           </p>
         </div>
         <div className="flex gap-3">
-          {phase === 'done' ? (
+          {phase === 'done' && (
             <Link to="/fridge" className="px-6 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold shadow-lg shadow-primary/20 inline-flex items-center gap-2">
               View fridge
               <span className="material-symbols-outlined text-base">arrow_forward</span>
             </Link>
-          ) : (
-            <Link to="/fridge" className="px-6 py-2.5 rounded-full bg-surface-container-highest text-primary font-semibold hover:bg-surface-container-high transition-colors">
-              Cancel
+          )}
+          {phase === 'review' && (
+            <Link to="/fridge" className="px-6 py-2.5 rounded-full bg-surface-container-highest text-primary font-semibold hover:bg-error-container/40 hover:text-error transition-colors">
+              Discard draft
             </Link>
           )}
         </div>
@@ -231,43 +305,132 @@ export default function UploadReceiptPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,.pdf"
+              accept="image/*"
+              capture="environment"
               onChange={handleFileChange}
               className="hidden"
             />
-            <div
+            <motion.div
               onClick={() => fileInputRef.current?.click()}
-              className="relative group cursor-pointer overflow-hidden rounded-[2.5rem] bg-surface-container-lowest border-2 border-dashed border-outline-variant hover:border-primary transition-colors h-[400px] flex flex-col items-center justify-center text-center p-8"
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              animate={{ scale: isDraggingOver ? 1.01 : 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className={`relative group cursor-pointer overflow-hidden rounded-[2.5rem] border-2 transition-colors h-[400px] flex flex-col items-center justify-center text-center p-8 ${
+                isDraggingOver
+                  ? 'bg-primary/10 border-solid border-primary'
+                  : file
+                    ? 'bg-surface-container-lowest border-solid border-primary/40'
+                    : 'bg-surface-container-lowest border-dashed border-outline-variant hover:border-primary'
+              }`}
             >
-              <div className="relative z-10">
-                <div className="w-20 h-20 bg-primary-fixed rounded-3xl flex items-center justify-center mx-auto mb-6 transform group-hover:rotate-6 transition-transform">
-                  <span className="material-symbols-outlined text-4xl text-on-primary-fixed" style={{ fontVariationSettings: "'FILL' 1" }}>cloud_upload</span>
-                </div>
-                {file ? (
-                  <>
-                    <h3 className="text-2xl font-bold text-on-surface mb-2">{file.name}</h3>
-                    <p className="text-on-surface-variant mb-6">
-                      {(file.size / 1024).toFixed(1)} KB &middot; Click to change
+              <AnimatePresence mode="wait">
+                {isDraggingOver ? (
+                  <motion.div
+                    key="dragging"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.2, ease: EASE }}
+                    className="relative z-10"
+                  >
+                    <motion.div
+                      className="w-20 h-20 bg-primary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-primary/30"
+                      animate={{ scale: [1, 1.08, 1] }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <span className="material-symbols-outlined text-4xl text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        download
+                      </span>
+                    </motion.div>
+                    <h3 className="text-2xl font-extrabold text-primary mb-1">Drop it here</h3>
+                    <p className="text-on-surface-variant text-sm">Release to upload</p>
+                  </motion.div>
+                ) : file && previewUrl ? (
+                  <motion.div
+                    key="file"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.3, ease: EASE }}
+                    className="relative z-10 flex flex-col items-center"
+                  >
+                    <div className="relative w-40 h-40 mx-auto mb-4 rounded-2xl overflow-hidden shadow-lg bg-surface-container">
+                      <motion.img
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.35, ease: EASE }}
+                        src={previewUrl}
+                        alt="Receipt preview"
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Scanning-line overlay during OCR */}
+                      {phase === 'parsing' && (
+                        <>
+                          <div className="absolute inset-0 bg-primary/10" />
+                          <motion.div
+                            className="absolute left-0 right-0 h-[3px] pointer-events-none"
+                            style={{
+                              background:
+                                'linear-gradient(90deg, transparent, #10b981, transparent)',
+                              boxShadow: '0 0 14px 2px rgba(16,185,129,0.7)',
+                            }}
+                            initial={{ top: 0 }}
+                            animate={{ top: '100%' }}
+                            transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
+                          />
+                        </>
+                      )}
+                      {phase !== 'parsing' && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          aria-label="Remove file"
+                          className="group/remove absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-white/95 text-on-surface flex items-center justify-center shadow-md hover:bg-white transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px] transition-transform duration-200 group-hover/remove:rotate-90">close</span>
+                        </button>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-on-surface mb-1 max-w-full truncate px-4">{file.name}</h3>
+                    <p className="text-on-surface-variant text-sm">
+                      {(file.size / 1024).toFixed(1)} KB
+                      {phase === 'parsing' ? ' · Reading items...' : ' · Click to change'}
                     </p>
-                  </>
+                  </motion.div>
                 ) : (
-                  <>
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.3, ease: EASE }}
+                    className="relative z-10"
+                  >
+                    <div className="w-20 h-20 bg-primary-fixed rounded-3xl flex items-center justify-center mx-auto mb-6 transform group-hover:rotate-6 transition-transform">
+                      <span className="material-symbols-outlined text-4xl text-on-primary-fixed" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        cloud_upload
+                      </span>
+                    </div>
                     <h3 className="text-2xl font-bold text-on-surface mb-2">Drop your receipt here</h3>
                     <p className="text-on-surface-variant mb-6 max-w-xs mx-auto">
-                      PNG, JPG, or PDF from any Australian retailer.
+                      PNG or JPG. A clear, well-lit photo works best.
                     </p>
-                  </>
+                    <span className="bg-surface-container-high px-8 py-3 rounded-full font-bold text-on-surface inline-block">
+                      Browse Files
+                    </span>
+                  </motion.div>
                 )}
-                <span className="bg-surface-container-high px-8 py-3 rounded-full font-bold text-on-surface inline-block">
-                  Browse Files
-                </span>
-              </div>
-            </div>
+              </AnimatePresence>
+            </motion.div>
 
             {/* Action buttons: Scan + Manual fallback */}
             <div className="flex flex-wrap gap-3">
-              <button
+              <motion.button
                 type="button"
+                animate={scanBtnControls}
                 onClick={handleParse}
                 disabled={!file || phase === 'parsing'}
                 className="flex-grow px-6 py-3 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
@@ -275,8 +438,12 @@ export default function UploadReceiptPage() {
                 <span className="material-symbols-outlined text-base">
                   {phase === 'parsing' ? 'hourglass_top' : 'auto_awesome'}
                 </span>
-                {phase === 'parsing' ? 'Scanning receipt...' : 'Scan receipt'}
-              </button>
+                {phase === 'parsing'
+                  ? 'Scanning receipt...'
+                  : !file
+                    ? 'Choose a file first'
+                    : 'Scan receipt'}
+              </motion.button>
               <button
                 type="button"
                 onClick={startManualEntry}
@@ -300,7 +467,7 @@ export default function UploadReceiptPage() {
                 <li className="flex gap-3">
                   <span className="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-bold flex-shrink-0">2</span>
                   <p className="text-sm text-on-surface-variant">
-                    OCR reads the items and shows them to you — nothing is saved yet.
+                    We read the items and show them to you. Nothing is saved yet.
                   </p>
                 </li>
                 <li className="flex gap-3">
@@ -317,9 +484,9 @@ export default function UploadReceiptPage() {
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-tertiary flex-shrink-0">info</span>
                 <div>
-                  <p className="text-sm font-bold text-on-tertiary-container mb-1">OCR isn&apos;t perfect</p>
+                  <p className="text-sm font-bold text-on-tertiary-container mb-1">You have the final say</p>
                   <p className="text-xs text-on-tertiary-container/80">
-                    Always review the detected items before confirming — you can fix any mistakes in the next step.
+                    Once we scan it, you can fix names, quantities, and prices before anything saves.
                   </p>
                 </div>
               </div>
@@ -359,7 +526,15 @@ export default function UploadReceiptPage() {
           </div>
 
           {/* Editable rows */}
-          <div className="space-y-2 mb-8">
+          <motion.div
+            className="space-y-2 mb-8"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+            }}
+          >
             {draft.length === 0 && (
               <div className="text-center py-8 text-on-surface-variant text-sm">
                 No items. Click &quot;+ Add item&quot; to start.
@@ -368,8 +543,12 @@ export default function UploadReceiptPage() {
             {draft.map((row) => {
               const blank = row.name.trim() === ''
               return (
-                <div
+                <motion.div
                   key={row._local}
+                  variants={{
+                    hidden: { opacity: 0, y: 8, scale: 0.97 },
+                    show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: EASE } },
+                  }}
                   className={`grid grid-cols-[1fr_100px_100px_40px] md:grid-cols-[1fr_120px_120px_40px] gap-2 md:gap-3 items-center p-2 rounded-xl ${
                     blank ? 'bg-surface-container-low/40' : 'bg-surface-container-low'
                   }`}
@@ -409,10 +588,10 @@ export default function UploadReceiptPage() {
                   >
                     <span className="material-symbols-outlined text-base">delete</span>
                   </button>
-                </div>
+                </motion.div>
               )
             })}
-          </div>
+          </motion.div>
 
           {/* Commit / cancel buttons */}
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-outline-variant/20 flex-wrap">
