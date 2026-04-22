@@ -7,7 +7,7 @@ export default function SignupPage() {
         <div className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
-            <Link to="/" className="font-headline font-extrabold text-2xl tracking-tight text-on-surface">The Living Larder</Link>
+            <Link to="/" className="font-headline font-extrabold text-2xl tracking-tight text-on-surface">Trolley for Tomorrow</Link>
           </div>
           <div className="hidden md:flex items-center gap-2 text-sm text-on-surface-variant">
             <span>Already have an account?</span>
@@ -26,7 +26,7 @@ export default function SignupPage() {
                 <span className="text-primary">sustainably.</span>
               </h2>
               <p className="text-on-surface-variant text-lg max-w-md leading-relaxed">
-                Join Trolly for Tomorrow and transform your grocery shopping into a mindful journey for your budget and the planet.
+                Join Trolley for Tomorrow and transform your grocery shopping into a mindful journey for your budget and the planet.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -44,7 +44,7 @@ export default function SignupPage() {
             <div className="relative h-64 w-full rounded-xl overflow-hidden shadow-sm">
               <img className="w-full h-full object-cover" alt="vibrant organic pantry with glass jars of grains and fresh herbs in soft sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6Y3XY-K-EU_6jLaew4OVRCObBuW-e9qm3Z3rfiGO0255fZVgUaAb4AuQ7Ttho3kfClLjszWmXogsDDCTY8zeeMiNPT-Et4rOwcUyHLbxXw9_4vSqaNfS5yAYkGKvLr08v-wcRSqsUGJFeEGn3itMp7KkmQSN78R9jRAHKM3znYchZGzqlgHh6efxAQf4ZoP6yj1tpFpw5JomrZnp6k4Kqoydsoy7Oapis_BKg_qBNYktjyJ5C_lIfpZwA3W3PbJLP9bzuG6HQKUE" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
-                <p className="text-white font-medium italic">&ldquo;The Living Larder turned my kitchen into a sanctuary of organization.&rdquo;</p>
+                <p className="text-white font-medium italic">&ldquo;Trolley for Tomorrow turned my kitchen into a sanctuary of organization.&rdquo;</p>
                 <p className="text-white/80 text-xs mt-1">&mdash; Sarah, Melbourne</p>
               </div>
             </div>
@@ -92,7 +92,7 @@ export default function SignupPage() {
                   </label>
                 </div>
                 <button className="w-full primary-gradient text-on-primary font-bold py-4 rounded-xl shadow-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2" type="submit">
-                  <span>Register for Trolly for Tomorrow</span>
+                  <span>Register for Trolley for Tomorrow</span>
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </button>
                 <div className="relative py-4">
@@ -123,9 +123,9 @@ export default function SignupPage() {
       <footer className="w-full py-12 px-6 mt-auto bg-emerald-900 text-emerald-50 text-xs uppercase tracking-widest border-t border-emerald-800/30">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-4">
-            <span className="font-black text-emerald-100">The Living Larder</span>
+            <span className="font-black text-emerald-100">Trolley for Tomorrow</span>
             <span className="hidden md:inline opacity-30">|</span>
-            <p className="normal-case tracking-normal opacity-80">&copy; 2024 The Living Larder. Nurturing Australian Kitchens.</p>
+            <p className="normal-case tracking-normal opacity-80">&copy; 2024 Trolley for Tomorrow. Nurturing Australian Kitchens.</p>
           </div>
           <div className="flex gap-6">
             <a className="text-emerald-400 hover:text-emerald-100 transition-opacity" href="#">Privacy Policy</a>

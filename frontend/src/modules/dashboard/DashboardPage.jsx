@@ -239,7 +239,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-2xl font-bold font-headline text-emerald-900 px-2">Trolly Tips</h2>
+          <h2 className="text-2xl font-bold font-headline text-emerald-900 px-2">Trolley Tips</h2>
           <div className="bg-emerald-900 rounded-[2rem] p-6 text-white relative overflow-hidden group">
             <div className="relative z-10">
               <span className="material-symbols-outlined text-emerald-300 mb-4 block" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>

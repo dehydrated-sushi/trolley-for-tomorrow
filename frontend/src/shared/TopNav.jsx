@@ -15,7 +15,7 @@ export default function TopNav() {
       <div className="flex justify-between items-center px-6 py-3 max-w-full mx-auto">
         <div className="flex items-center gap-8">
           <Link to="/" className="text-xl font-bold text-emerald-900 tracking-tight font-headline">
-            The Living Larder
+            Trolley for Tomorrow
           </Link>
           <div className="hidden md:flex gap-6 items-center">
             {NAV_LINKS.map(({ label, to }) => (

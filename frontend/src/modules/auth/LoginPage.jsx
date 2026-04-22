@@ -10,7 +10,7 @@ export default function LoginPage() {
             <div className="z-10">
               <div className="flex items-center gap-2 text-on-primary mb-12">
                 <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>shopping_cart</span>
-                <span className="font-headline font-extrabold text-2xl tracking-tighter">Trolly for Tomorrow</span>
+                <span className="font-headline font-extrabold text-2xl tracking-tighter">Trolley for Tomorrow</span>
               </div>
               <h1 className="font-headline text-5xl font-bold text-on-primary leading-tight mb-6">
                 Sustain your home,<br />
