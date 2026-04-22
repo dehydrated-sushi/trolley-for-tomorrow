@@ -23,3 +23,4 @@ backend/rds-ca.pem
 backend/data/processed/recipes_clean.csv
 backend/database/food_app.db
 backend/instance/*.db
+

@@ -1,1 +1,105 @@
 @import "tailwindcss";
+
+@theme {
+  /* Primary */
+  --color-primary: #146c3c;
+  --color-primary-container: #5cad76;
+  --color-primary-fixed: #a1f5b8;
+  --color-primary-fixed-dim: #86d89d;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #003d1e;
+  --color-on-primary-fixed: #00210d;
+  --color-on-primary-fixed-variant: #00522a;
+  --color-inverse-primary: #86d89d;
+
+  /* Secondary */
+  --color-secondary: #2e6a43;
+  --color-secondary-container: #aeefbe;
+  --color-secondary-fixed: #b1f1c0;
+  --color-secondary-fixed-dim: #96d5a6;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #326e47;
+  --color-on-secondary-fixed: #00210e;
+  --color-on-secondary-fixed-variant: #11512d;
+
+  /* Tertiary */
+  --color-tertiary: #974355;
+  --color-tertiary-container: #e27f92;
+  --color-tertiary-fixed: #ffd9de;
+  --color-tertiary-fixed-dim: #ffb2be;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #61192c;
+  --color-on-tertiary-fixed: #3f0015;
+  --color-on-tertiary-fixed-variant: #7a2c3e;
+
+  /* Error */
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  /* Surface */
+  --color-surface: #f4fbf6;
+  --color-surface-dim: #d5dcd7;
+  --color-surface-bright: #f4fbf6;
+  --color-surface-variant: #dde4df;
+  --color-surface-tint: #146c3c;
+  --color-surface-container: #e9f0eb;
+  --color-surface-container-low: #eef5f0;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e3eae5;
+  --color-surface-container-highest: #dde4df;
+  --color-on-surface: #161d1a;
+  --color-on-surface-variant: #3f4940;
+
+  /* Background */
+  --color-background: #f4fbf6;
+  --color-on-background: #161d1a;
+
+  /* Outline */
+  --color-outline: #6f7a70;
+  --color-outline-variant: #bfc9be;
+
+  /* Inverse */
+  --color-inverse-surface: #2b322f;
+  --color-inverse-on-surface: #ebf2ed;
+
+  /* Fonts */
+  --font-headline: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-label: 'Inter', sans-serif;
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Base typography */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Glassmorphism nav */
+.glass-nav {
+  background: rgba(244, 251, 246, 0.8);
+  backdrop-filter: blur(12px);
+}
+
+/* Gradient utilities */
+.hero-gradient {
+  background: linear-gradient(135deg, #146c3c 0%, #5cad76 100%);
+}
+
+.primary-gradient {
+  background: linear-gradient(135deg, #146c3c 0%, #5cad76 100%);
+}
+
+/* Editorial shadow */
+.editorial-shadow {
+  box-shadow: 0 8px 24px rgba(22, 29, 26, 0.06);
+}
