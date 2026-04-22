@@ -1,9 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../../lib/api'
 import CategoryTag from '../../shared/CategoryTag'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
+
+const SORT_OPTIONS = [
+  { key: 'match',           label: 'Best match' },
+  { key: 'quickest',        label: 'Quickest' },
+  { key: 'fewest_missing',  label: 'Fewest missing ingredients' },
+  { key: 'highest_protein', label: 'Highest protein' },
+  { key: 'lowest_calories', label: 'Lowest calories' },
+]
 
 /** Dominant category across the full ingredient list (for hero tint). */
 function dominantCategory(recipe) {
@@ -86,8 +94,27 @@ function RecipeCard({ meal, tagDefs }) {
         >
           {heroInfo.icon}
         </span>
-        <div className="absolute top-4 right-4 bg-primary text-on-primary px-4 py-1.5 rounded-full font-bold text-xs tracking-wider uppercase">
-          {Math.round(meal.match_score * 100)}% Match
+        <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
+          <div className="bg-primary text-on-primary px-4 py-1.5 rounded-full font-bold text-xs tracking-wider uppercase shadow-md">
+            {Math.round(meal.match_score * 100)}% Match
+          </div>
+          {(() => {
+            const missing = meal.total_ingredients - meal.match_count
+            if (missing === 0) {
+              return (
+                <div className="inline-flex items-center gap-1 bg-emerald-500 text-white px-3 py-1 rounded-full font-bold text-[10px] tracking-wider uppercase shadow-md">
+                  <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                  No shopping
+                </div>
+              )
+            }
+            return (
+              <div className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 px-3 py-1 rounded-full font-bold text-[10px] tracking-wider uppercase shadow-sm">
+                <span className="material-symbols-outlined text-[12px]">shopping_basket</span>
+                Need {missing} {missing === 1 ? 'item' : 'items'}
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -239,12 +266,18 @@ export default function MealsPage() {
   const [strictOnly, setStrictOnly] = useState(false)
   const [hideDrinks, setHideDrinks] = useState(false)
   const [selectedTags, setSelectedTags] = useState([])
+  const [sortKey, setSortKey] = useState('match')
   const [page, setPage] = useState(1)
 
   // Metadata
   const [tagDefs, setTagDefs] = useState({})
   const [activePrefs, setActivePrefs] = useState([])
   const [prefLabels, setPrefLabels] = useState({})
+  const [strictCount, setStrictCount] = useState(0)
+  const [oneMissingCount, setOneMissingCount] = useState(0)
+
+  // UI state
+  const [fridgeExpanded, setFridgeExpanded] = useState(false)
 
   // Fetch tag definitions once
   useEffect(() => {
@@ -266,6 +299,7 @@ export default function MealsPage() {
       if (strictOnly) params.set('strict_only', 'true')
       if (hideDrinks) params.set('hide_drinks', 'true')
       if (selectedTags.length) params.set('tags', selectedTags.join(','))
+      if (sortKey && sortKey !== 'match') params.set('sort', sortKey)
       params.set('page', String(page))
       params.set('per_page', String(PER_PAGE))
 
@@ -275,6 +309,8 @@ export default function MealsPage() {
       setActivePrefs(data.active_preferences || [])
       setTotal(data.total || 0)
       setTotalPages(data.total_pages || 1)
+      setStrictCount(data.strict_count || 0)
+      setOneMissingCount(data.one_missing_count || 0)
       // Server may clamp page — sync state
       if (data.page && data.page !== page) {
         setPage(data.page)
@@ -285,7 +321,7 @@ export default function MealsPage() {
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strictOnly, hideDrinks, selectedTags, page])
+  }, [strictOnly, hideDrinks, selectedTags, sortKey, page])
 
   useEffect(() => {
     loadRecommendations()
@@ -314,14 +350,35 @@ export default function MealsPage() {
   const goPrev = () => setPage((p) => Math.max(1, p - 1))
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
 
+  const handleSortChange = (e) => {
+    setSortKey(e.target.value)
+    setPage(1)
+  }
+
   const filtersActive = strictOnly || hideDrinks || selectedTags.length > 0 || activePrefs.length > 0
+
+  // Summary of fridge contents — shown as a one-line preview when collapsed.
+  const fridgeSummary = useMemo(() => {
+    if (!availableItems.length) return null
+    const counts = availableItems.reduce((acc, item) => {
+      const cat = typeof item === 'string' ? 'other' : item.category || 'other'
+      acc[cat] = (acc[cat] || 0) + 1
+      return acc
+    }, {})
+    const top = Object.entries(counts)
+      .filter(([c]) => c !== 'other')
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([c]) => getCategoryInfo(c).label.toLowerCase())
+    return { count: availableItems.length, top }
+  }, [availableItems])
 
   return (
     <div className="px-6 md:px-12">
       <header className="max-w-5xl mx-auto mb-8 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight mb-4">
-            What&apos;s Cooking, <span className="text-primary">Friend?</span>
+            Smart meals <span className="text-primary">from your fridge</span>
           </h1>
           <p className="text-on-surface-variant max-w-2xl leading-relaxed">
             Recipes matched to what&apos;s already in your fridge, filtered by your dietary preferences.
@@ -330,103 +387,112 @@ export default function MealsPage() {
         <NutritionLegend />
       </header>
 
-      {/* Cook Now / Hide drinks / Diet badges */}
-      <section className="max-w-5xl mx-auto mb-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleToggleStrict}
-          className={
-            strictOnly
-              ? 'inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-on-primary font-semibold text-sm shadow-md'
-              : 'inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container-high text-on-surface font-semibold text-sm hover:bg-surface-container-highest transition-colors'
-          }
-          title={strictOnly
-            ? 'Showing only recipes where every ingredient is already in your fridge.'
-            : 'Click to show only recipes you can cook right now without shopping.'}
-        >
-          <span className="material-symbols-outlined text-base">
-            {strictOnly ? 'check_circle' : 'shopping_basket'}
-          </span>
-          {strictOnly ? 'Cook Now (strict)' : 'Cook Now'}
-        </button>
+      {/* Unified filter row — match-strictness, drinks toggle, and tag chips all together */}
+      <section className="max-w-5xl mx-auto mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Cook without shopping (strict_only) */}
+          <button
+            type="button"
+            onClick={handleToggleStrict}
+            className={
+              strictOnly
+                ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02] bg-emerald-600 text-white'
+                : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed border-emerald-600/40 text-emerald-700 bg-transparent'
+            }
+            title={strictOnly
+              ? 'Showing only recipes where every ingredient is already in your fridge.'
+              : 'Show only recipes you can cook right now without shopping.'}
+          >
+            <span className="material-symbols-outlined text-sm">check_circle</span>
+            Cook without shopping
+          </button>
 
-        <button
-          type="button"
-          onClick={handleToggleDrinks}
-          className={
-            hideDrinks
-              ? 'inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-tertiary text-white font-semibold text-sm shadow-md'
-              : 'inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container-high text-on-surface font-semibold text-sm hover:bg-surface-container-highest transition-colors'
-          }
-          title={hideDrinks ? 'Drinks are hidden. Click to show them.' : 'Hide drink recipes from the list.'}
-        >
-          <span className="material-symbols-outlined text-base">
-            {hideDrinks ? 'visibility_off' : 'local_bar'}
-          </span>
-          {hideDrinks ? 'Drinks hidden' : 'Hide drinks'}
-        </button>
+          {/* Hide drinks */}
+          <button
+            type="button"
+            onClick={handleToggleDrinks}
+            className={
+              hideDrinks
+                ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02] bg-indigo-500 text-white'
+                : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed border-indigo-500/40 text-indigo-600 bg-transparent'
+            }
+            title={hideDrinks ? 'Drinks are hidden. Click to show them.' : 'Hide drink recipes from the list.'}
+          >
+            <span className="material-symbols-outlined text-sm">local_bar</span>
+            Hide drinks
+          </button>
 
-        {activePrefs.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 ml-2">
-            <span className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Diet:</span>
+          {/* Recipe-property tag chips */}
+          {Object.entries(tagDefs).map(([tag, info]) => {
+            const active = selectedTags.includes(tag)
+            const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => handleToggleTag(tag)}
+                className={
+                  active
+                    ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02]'
+                    : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed'
+                }
+                style={{
+                  backgroundColor: active ? style.fg : 'transparent',
+                  color: active ? 'white' : style.fg,
+                  borderColor: active ? style.fg : `${style.fg}55`,
+                }}
+                title={info.description}
+              >
+                <span className="material-symbols-outlined text-sm">{style.icon}</span>
+                {info.label}
+              </button>
+            )
+          })}
+
+          {(selectedTags.length > 0 || strictOnly || hideDrinks) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTags([])
+                setStrictOnly(false)
+                setHideDrinks(false)
+                setPage(1)
+              }}
+              className="ml-2 text-xs text-on-surface-variant hover:text-primary underline underline-offset-4"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Dietary preferences indicator — quieter, about profile settings not page filters */}
+      <section className="max-w-5xl mx-auto mb-6">
+        {activePrefs.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="uppercase tracking-widest text-on-surface-variant font-bold">Diet:</span>
             {activePrefs.map((pref) => (
               <span
                 key={pref}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-tertiary-container/30 text-on-tertiary-container text-xs font-semibold"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-tertiary-container/30 text-on-tertiary-container font-semibold"
               >
                 <span className="material-symbols-outlined text-xs">restaurant</span>
                 {prefLabels[pref] || pref}
               </span>
             ))}
-            <Link to="/profile" className="text-xs text-primary font-semibold hover:underline ml-1">
+            <Link to="/profile" className="text-primary font-semibold hover:underline ml-1">
               Edit
             </Link>
           </div>
+        ) : (
+          <span className="text-xs text-on-surface-variant/70">
+            No dietary filters active ·{' '}
+            <Link to="/profile" className="text-primary font-semibold hover:underline">
+              Edit in Profile
+            </Link>
+          </span>
         )}
       </section>
-
-      {/* Tag filter chip row */}
-      {Object.keys(tagDefs).length > 0 && (
-        <section className="max-w-5xl mx-auto mb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-widest text-on-surface-variant font-bold mr-2">Filter by:</span>
-            {Object.entries(tagDefs).map(([tag, info]) => {
-              const active = selectedTags.includes(tag)
-              const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => handleToggleTag(tag)}
-                  className={
-                    active
-                      ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-transform scale-[1.02]'
-                      : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold opacity-70 hover:opacity-100 transition-opacity'
-                  }
-                  style={{
-                    backgroundColor: active ? style.fg : style.bg,
-                    color: active ? 'white' : style.fg,
-                    borderColor: style.fg,
-                  }}
-                  title={info.description}
-                >
-                  <span className="material-symbols-outlined text-sm">{style.icon}</span>
-                  {info.label}
-                </button>
-              )
-            })}
-            {selectedTags.length > 0 && (
-              <button
-                type="button"
-                onClick={clearTags}
-                className="ml-2 text-xs text-on-surface-variant hover:text-primary underline underline-offset-4"
-              >
-                Clear ({selectedTags.length})
-              </button>
-            )}
-          </div>
-        </section>
-      )}
 
       {error && (
         <div className="max-w-5xl mx-auto mb-8 p-4 rounded-2xl bg-error-container/30 text-error text-sm font-medium">
@@ -443,47 +509,104 @@ export default function MealsPage() {
       {!loading && !error && (
         <>
           <section className="max-w-5xl mx-auto mb-12">
-            <div className="bg-surface-container-low rounded-3xl p-8 editorial-shadow">
-              <h3 className="font-headline font-bold text-lg mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">auto_awesome</span>
-                Your fridge ingredients
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {availableItems.length > 0 ? (
-                  availableItems.map((item) => {
-                    const name = typeof item === 'string' ? item : item.name
-                    const cat = typeof item === 'string' ? 'other' : item.category
-                    const info = getCategoryInfo(cat)
-                    return (
-                      <span
-                        key={name}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full font-medium text-sm"
-                        style={{ backgroundColor: info.bg, color: info.colour }}
-                        title={`${info.label} — ${info.description}`}
-                      >
-                        <span className="material-symbols-outlined text-sm">{info.icon}</span>
-                        {name}
+            <div className="bg-surface-container-low rounded-3xl px-6 py-4 editorial-shadow">
+              {availableItems.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="material-symbols-outlined text-primary">auto_awesome</span>
+                      <span>
+                        <span className="font-bold text-on-surface">
+                          {fridgeSummary?.count} ingredients
+                        </span>
+                        {fridgeSummary?.top?.length > 0 && (
+                          <span className="text-on-surface-variant">
+                            {' · '}strongest in {fridgeSummary.top.join(' and ')}
+                          </span>
+                        )}
                       </span>
-                    )
-                  })
-                ) : (
-                  <p className="text-on-surface-variant text-sm">
-                    No fridge items found.{' '}
-                    <Link to="/upload-receipt" className="text-primary font-bold hover:underline">Upload a receipt</Link> first.
-                  </p>
-                )}
-              </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFridgeExpanded((v) => !v)}
+                      className="inline-flex items-center gap-1 text-xs text-primary font-semibold hover:underline"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {fridgeExpanded ? 'expand_less' : 'expand_more'}
+                      </span>
+                      {fridgeExpanded ? 'Hide' : 'View all'}
+                    </button>
+                  </div>
+
+                  {fridgeExpanded && (
+                    <div className="mt-4 pt-4 border-t border-outline-variant/15 flex flex-wrap gap-2">
+                      {availableItems.map((item) => {
+                        const name = typeof item === 'string' ? item : item.name
+                        const cat = typeof item === 'string' ? 'other' : item.category
+                        const info = getCategoryInfo(cat)
+                        return (
+                          <span
+                            key={name}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium text-sm"
+                            style={{ backgroundColor: info.bg, color: info.colour }}
+                            title={`${info.label} — ${info.description}`}
+                          >
+                            <span className="material-symbols-outlined text-sm">{info.icon}</span>
+                            {name}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-on-surface-variant text-sm">
+                  No fridge items found.{' '}
+                  <Link to="/upload-receipt" className="text-primary font-bold hover:underline">Upload a receipt</Link> first.
+                </p>
+              )}
             </div>
           </section>
 
           <section className="max-w-5xl mx-auto">
             <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
-              <h2 className="text-2xl font-headline font-bold text-on-surface">Ranked Recommendations</h2>
-              <span className="text-sm text-on-surface-variant">
-                {total === 0
-                  ? 'No recipes found'
-                  : `Showing ${Math.min((page - 1) * PER_PAGE + 1, total)}–${Math.min(page * PER_PAGE, total)} of ${total}`}
-              </span>
+              <div>
+                <h2 className="text-2xl font-headline font-bold text-on-surface mb-1">
+                  {total === 0
+                    ? 'No matching recipes'
+                    : strictCount > 0
+                      ? `${strictCount} ${strictCount === 1 ? 'recipe matches' : 'recipes match'} everything in your fridge`
+                      : oneMissingCount > 0
+                        ? `${oneMissingCount} ${oneMissingCount === 1 ? 'recipe needs' : 'recipes need'} just 1 more item`
+                        : 'Top matches from your fridge'}
+                </h2>
+                {total > 0 && (
+                  <p className="text-sm text-on-surface-variant">
+                    {strictCount > 0 && oneMissingCount > 0 && (
+                      <>{oneMissingCount} more {oneMissingCount === 1 ? 'needs' : 'need'} just 1 item · </>
+                    )}
+                    Showing {Math.min((page - 1) * PER_PAGE + 1, total)}–{Math.min(page * PER_PAGE, total)} of {total}
+                  </p>
+                )}
+              </div>
+
+              {total > 0 && (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="sort-select" className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+                    Sort by
+                  </label>
+                  <select
+                    id="sort-select"
+                    value={sortKey}
+                    onChange={handleSortChange}
+                    className="px-4 py-2 rounded-full bg-surface-container-high text-on-surface text-sm font-semibold border-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    {SORT_OPTIONS.map((opt) => (
+                      <option key={opt.key} value={opt.key}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {recommendations.length === 0 && (
@@ -504,7 +627,7 @@ export default function MealsPage() {
                         onClick={handleToggleStrict}
                         className="text-xs text-primary font-semibold hover:underline"
                       >
-                        Turn off Cook Now
+                        Allow shopping
                       </button>
                     )}
                     {hideDrinks && (

@@ -17,7 +17,7 @@ export default function AppShell() {
         <Footer />
       </div>
       <MobileBottomNav />
-      <DevResetButton />
+      {import.meta.env.DEV && <DevResetButton />}
     </div>
   )
 }

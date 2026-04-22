@@ -18,6 +18,17 @@ SKIP_ITEMS = frozenset({
 
 MIN_ITEM_LENGTH = 3
 
+# Minimum share of recipe ingredients that must be in the user's fridge
+# before the recipe appears in recommendations. Stops the list from
+# filling up with 3-of-15 partial matches. Overridden when strict_only=true
+# (which requires 100%).
+MIN_MATCH_RATIO = 0.4
+
+# Valid sort keys accepted by the `sort` query param.
+SORT_KEYS = frozenset({
+    "match", "quickest", "fewest_missing", "highest_protein", "lowest_calories",
+})
+
 
 # ==========================================================================
 # Tag definitions.
@@ -190,6 +201,11 @@ def get_meal_recommendations():
         strict_only = _parse_bool(request.args.get("strict_only"), default=False)
         hide_drinks = _parse_bool(request.args.get("hide_drinks"), default=False)
 
+        # Sort order — default "match" (current ranking by match score).
+        sort_key = (request.args.get("sort") or "match").strip().lower()
+        if sort_key not in SORT_KEYS:
+            sort_key = "match"
+
         # Tags filter — recipe must have ALL selected tags
         raw_tags = request.args.get("tags", "")
         selected_tags = [t.strip() for t in raw_tags.split(",") if t.strip() and t.strip() in TAG_KEYS]
@@ -232,6 +248,9 @@ def get_meal_recommendations():
             "hide_drinks": hide_drinks,
             "selected_tags": selected_tags,
             "active_preferences": active_prefs,
+            "sort": sort_key,
+            "strict_count": 0,
+            "one_missing_count": 0,
         }
 
         if not all_items:
@@ -302,7 +321,13 @@ def get_meal_recommendations():
                 if mc != total:
                     continue
             else:
+                # Require at least 2 overlapping ingredients AND at least
+                # MIN_MATCH_RATIO of the recipe's ingredients in the fridge.
+                # Without the ratio floor the list fills with sparse matches
+                # (e.g. 2 of 15) that aren't real recommendations.
                 if mc < 2:
+                    continue
+                if total > 0 and (mc / total) < MIN_MATCH_RATIO:
                     continue
 
             cost = round(cost, 2)
@@ -347,8 +372,42 @@ def get_meal_recommendations():
                 "tags": tags,
             })
 
-        all_recipes.sort(
-            key=lambda x: (-x["match_score"], -x["match_count"], x["name"])
+        # ---- Sorting ----
+        # All sort keys use a numeric falsy-safe fallback so recipes with
+        # None for the column sort to the end (descending) or start (ascending).
+        if sort_key == "quickest":
+            all_recipes.sort(
+                key=lambda x: (x["minutes"] if x["minutes"] is not None else 10**9,
+                               -x["match_score"], x["name"])
+            )
+        elif sort_key == "fewest_missing":
+            all_recipes.sort(
+                key=lambda x: (x["total_ingredients"] - x["match_count"],
+                               -x["match_score"], x["name"])
+            )
+        elif sort_key == "highest_protein":
+            all_recipes.sort(
+                key=lambda x: (-(x["protein"] if x["protein"] is not None else -1),
+                               -x["match_score"], x["name"])
+            )
+        elif sort_key == "lowest_calories":
+            all_recipes.sort(
+                key=lambda x: (x["calories"] if x["calories"] is not None else 10**9,
+                               -x["match_score"], x["name"])
+            )
+        else:  # default: "match"
+            all_recipes.sort(
+                key=lambda x: (-x["match_score"], -x["match_count"], x["name"])
+            )
+
+        # ---- Summary counts for the informative header ----
+        strict_count = sum(
+            1 for r in all_recipes
+            if r["total_ingredients"] > 0 and r["match_count"] == r["total_ingredients"]
+        )
+        one_missing_count = sum(
+            1 for r in all_recipes
+            if (r["total_ingredients"] - r["match_count"]) == 1
         )
 
         # Pagination slice
@@ -368,6 +427,9 @@ def get_meal_recommendations():
             "total": total,
             "page": page,
             "total_pages": total_pages,
+            "sort": sort_key,
+            "strict_count": strict_count,
+            "one_missing_count": one_missing_count,
         })
 
         return jsonify(base_response), 200

@@ -5,6 +5,44 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.5.0] — 2026-04-23
+
+### Added — Meals page overhaul + sort dropdown
+
+**Module:** `frontend/src/modules/meals`
+
+- **Sort dropdown** in the recommendations header. Five options wired to the new backend `?sort=` param: Best match (default), Quickest, Fewest missing ingredients, Highest protein, Lowest calories.
+- **Informative recommendations header** driven by backend counts (`strict_count`, `one_missing_count`) — reads *"3 recipes match everything in your fridge"* / *"5 recipes need just 1 more item"* / *"Top matches from your fridge"* / *"No matching recipes"* depending on the data shape.
+- **No-dietary-prefs indicator** — when a user has no dietary filters set, the page now explicitly shows "No dietary filters active · Edit in Profile" instead of staying silent.
+- **"No shopping" / "Need N items"** pills on each recipe card, layered under the existing match-% pill. Green for 100% match, amber for partial. Communicates the frugal story without needing price data.
+
+### Changed — Meals page copy, layout, and filter UX
+
+**Module:** `frontend/src/modules/meals`
+
+- Headline "What's Cooking, Friend?" → **"Smart meals from your fridge"** (green accent on "from your fridge").
+- "Cook Now" button renamed to **"Cook without shopping"** (less techy, more descriptive of its behaviour). Also updates the empty-state CTA from "Turn off Cook Now" to **"Allow shopping"**.
+- **Unified single filter row** replaces the previous two-row layout. `Cook without shopping`, `Hide drinks`, and the eight recipe-property tag chips all sit in one wrapping row with consistent inactive styling (dashed outline + 50% opacity) and active styling (filled + white text + slight scale). The "FILTER BY:" label is gone. A single "Clear filters" link resets all three filter types at once.
+- "Your fridge ingredients" card **collapsed by default** to a single line summary ("38 ingredients · strongest in proteins and beverages") with a "View all" toggle. Expanding shows the full pill list. Gives the fold back to the actual recipes.
+- Dietary preferences indicator demoted to a smaller quieter line below the filter row — it's settings metadata, not a page filter.
+
+### Changed — Shared shell and navigation
+
+**Module:** `frontend/src/shared`
+
+- `SideNav.jsx` labels unified with the top nav terminology. Previously: `Overview / Receipts / Inventory / Recipes / Settings`. Now: `Dashboard / Virtual Fridge / Upload Receipt / Meal Plans / Shopping List / Profile`.
+- Dropped the "Kitchen Manager / Australian Household" placeholder header from the side nav.
+- `AppShell.jsx`: `DevResetButton` now rendered only in dev mode via `{import.meta.env.DEV && <DevResetButton />}`. Production builds strip it entirely so a mentor can't accidentally click it mid-demo and wipe the database.
+
+### Notes for maintainers
+
+- The Meals page relies on two new response fields from the backend: `strict_count` (recipes with 100% fridge match) and `one_missing_count` (recipes missing exactly one ingredient). If the backend endpoint loses them, the informative header silently falls back to generic copy but won't crash.
+- Frontend `SORT_OPTIONS` in `MealsPage.jsx` must stay in sync with backend `SORT_KEYS` in `meal_plan/routes.py`. Adding a sort requires editing both.
+- The Meals page has **no framer-motion animations**. An earlier attempt caused a Dashboard regression (cards stuck at opacity 0 via `motion.create(Link)` + parent variants). If reintroduced, test on a single card first.
+- No price data is shown anywhere on the page. Deferred to a later iteration. The "frugal story" is currently carried by the "No shopping" / "Need N items" badges on recipe cards.
+
+---
+
 ## [1.4.0] — 2026-04-23
 
 ### Changed — Receipt upload page overhauled (copy, validation, animations)
