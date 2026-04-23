@@ -31,6 +31,17 @@ def _ensure_table():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """))
+    # Favourite recipes. Composite PK keeps it star-toggle-idempotent without
+    # needing a separate id column. user_id kept in the schema so the multi-
+    # user future is a schema-compatible pivot, not a migration.
+    db.session.execute(text("""
+        CREATE TABLE IF NOT EXISTS user_favourites (
+            user_id    INTEGER NOT NULL,
+            recipe_id  INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, recipe_id)
+        )
+    """))
     db.session.commit()
     _TABLE_INITIALISED = True
 
@@ -198,6 +209,102 @@ def set_budget():
         db.session.commit()
 
         return jsonify({"budget": budget}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Favourite recipes
+#
+# Single-user demo, user_id = 1 for every row. Composite PK (user_id,
+# recipe_id) makes the PUT endpoint naturally idempotent — re-starring an
+# already-favourite recipe is a no-op at the DB level thanks to
+# ON CONFLICT DO NOTHING.
+# ---------------------------------------------------------------------------
+
+_DEMO_USER_ID = 1
+
+
+@bp.route("/favourites", methods=["GET"])
+def list_favourites():
+    """Return the user's favourite recipes, joined with the recipes table so
+    the caller gets full records (name, ingredients_clean, match surfaces,
+    etc.) without a second round-trip."""
+    try:
+        _ensure_table()
+        rows = db.session.execute(text("""
+            SELECT r.id, r.name, r.ingredients_clean, r.steps_clean,
+                   r.calories, r.protein, r.carbohydrates, r.sugar,
+                   r.total_fat, r.saturated_fat, r.sodium,
+                   r.minutes, r.n_ingredients,
+                   uf.created_at AS favourited_at
+            FROM user_favourites uf
+            JOIN recipes r ON r.id = uf.recipe_id
+            WHERE uf.user_id = :uid
+            ORDER BY uf.created_at DESC
+        """), {"uid": _DEMO_USER_ID}).fetchall()
+
+        recipes = []
+        for r in rows:
+            m = dict(r._mapping)
+            # Split pipe-delimited fields the same way meal_plan does.
+            m["ingredients"] = [
+                i.strip() for i in (m.pop("ingredients_clean") or "").split("|") if i.strip()
+            ]
+            m["steps"] = [
+                s.strip() for s in (m.pop("steps_clean") or "").split("|") if s.strip()
+            ]
+            recipes.append(m)
+
+        return jsonify({
+            "favourite_recipe_ids": [r["id"] for r in recipes],
+            "favourites":           recipes,
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/favourites/<int:recipe_id>", methods=["PUT"])
+def add_favourite(recipe_id):
+    """Idempotent star. Returns the new state so the client can verify."""
+    try:
+        _ensure_table()
+
+        # Confirm the recipe exists before inserting — avoids orphan rows if
+        # a stale client sends a recipe_id that was deleted.
+        row = db.session.execute(
+            text("SELECT id FROM recipes WHERE id = :rid"),
+            {"rid": recipe_id},
+        ).fetchone()
+        if row is None:
+            return jsonify({"error": "recipe not found"}), 404
+
+        db.session.execute(text("""
+            INSERT INTO user_favourites (user_id, recipe_id)
+            VALUES (:uid, :rid)
+            ON CONFLICT (user_id, recipe_id) DO NOTHING
+        """), {"uid": _DEMO_USER_ID, "rid": recipe_id})
+        db.session.commit()
+
+        return jsonify({"recipe_id": recipe_id, "favourited": True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/favourites/<int:recipe_id>", methods=["DELETE"])
+def remove_favourite(recipe_id):
+    """Idempotent un-star. No-op if not currently starred."""
+    try:
+        _ensure_table()
+        db.session.execute(text("""
+            DELETE FROM user_favourites
+            WHERE user_id = :uid AND recipe_id = :rid
+        """), {"uid": _DEMO_USER_ID, "rid": recipe_id})
+        db.session.commit()
+        return jsonify({"recipe_id": recipe_id, "favourited": False}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

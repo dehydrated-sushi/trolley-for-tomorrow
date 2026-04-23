@@ -24,3 +24,6 @@ backend/data/processed/recipes_clean.csv
 backend/database/food_app.db
 backend/instance/*.db
 
+# Pixabay-fetched recipe hero photos — rebuilt on demand, never committed
+backend/data/recipe-covers/
+

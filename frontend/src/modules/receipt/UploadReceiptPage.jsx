@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useAnimation } from 'framer-motion'
 import { API_BASE } from '../../lib/api'
+import { findUncheckedMatches, markChecked } from '../../shared/shoppingList'
+import { toast } from '../../shared/toastBus'
 
 // Phases: 'idle' (no file picked), 'parsing' (OCR running), 'review'
 // (editable draft shown), 'committing' (saving), 'done' (committed).
@@ -25,6 +27,14 @@ export default function UploadReceiptPage() {
   const [draft, setDraft] = useState([]) // editable item rows
   const [sourceFilename, setSourceFilename] = useState('')
   const [committedCount, setCommittedCount] = useState(0)
+  // Reconciliation panel state. `matches` is the list of
+  // { item, matchedReceiptName } pairs computed right after a successful
+  // commit. `selectedIds` tracks which of those the user wants to cross off
+  // (default: all of them). `reconciled` flips to true after the user clicks
+  // "Cross off", turning the panel into a small confirmation row.
+  const [matches, setMatches] = useState([])
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [reconciled, setReconciled] = useState(false)
   const scanBtnControls = useAnimation()
 
   const setMsg = (txt, err = false) => {
@@ -171,7 +181,37 @@ export default function UploadReceiptPage() {
     setPhase('idle')
     setSourceFilename('')
     setCommittedCount(0)
+    setMatches([])
+    setSelectedIds(new Set())
+    setReconciled(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // --- Reconciliation handlers ---
+  const toggleMatchSelection = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const confirmReconciliation = () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    markChecked(ids)
+    setReconciled(true)
+    toast.show({
+      message: `Crossed ${ids.length} item${ids.length !== 1 ? 's' : ''} off your shopping list`,
+      tone: 'default',
+    })
+  }
+
+  const dismissReconciliation = () => {
+    setMatches([])
+    setSelectedIds(new Set())
+    setReconciled(false)
   }
 
   // --- Step 2: commit (save to fridge) ---
@@ -206,6 +246,14 @@ export default function UploadReceiptPage() {
       setCommittedCount(data.count || 0)
       setMsg(data.message || `Added ${data.count} item(s) to your fridge.`)
       setPhase('done')
+
+      // Reconcile against the shopping list. We match on the names the user
+      // confirmed (validRows), not the raw OCR output, because the review
+      // step is the source of truth.
+      const hits = findUncheckedMatches(validRows)
+      setMatches(hits)
+      setSelectedIds(new Set(hits.map((h) => h.item.id)))
+      setReconciled(false)
 
       // Prefetch budget-status so Dashboard shows updated spending immediately.
       // Fire-and-forget; we don't care about the result here.
@@ -279,6 +327,146 @@ export default function UploadReceiptPage() {
           <p className="text-on-surface-variant mb-8">
             {committedCount} item{committedCount !== 1 ? 's' : ''} saved. They&apos;re ready for meal suggestions.
           </p>
+
+          {/* Shopping-list reconciliation panel. Only renders when the
+              confirmed items intersect the user's unchecked shopping list.
+              Post-confirm it collapses to a compact acknowledgement so the
+              user has clear feedback without losing context. */}
+          <AnimatePresence mode="wait">
+            {matches.length > 0 && !reconciled && (
+              <motion.div
+                key="reconcile-panel"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.35, ease: EASE }}
+                className="mb-8 text-left bg-primary-fixed/40 rounded-3xl p-6 md:p-8 border border-primary/20"
+              >
+                <div className="flex items-start gap-4 mb-5">
+                  <div className="w-11 h-11 rounded-2xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-primary">playlist_add_check</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold text-on-surface">
+                      {matches.length === 1
+                        ? '1 item from your shopping list was on this receipt'
+                        : `${matches.length} items from your shopping list were on this receipt`}
+                    </h3>
+                    <p className="text-sm text-on-surface-variant mt-1">
+                      Cross off what you actually picked up. Uncheck anything you didn&apos;t buy.
+                    </p>
+                  </div>
+                </div>
+
+                <motion.ul
+                  className="space-y-2 mb-5"
+                  initial="hidden"
+                  animate="show"
+                  variants={{
+                    hidden: {},
+                    show: { transition: { staggerChildren: 0.05, delayChildren: 0.1 } },
+                  }}
+                >
+                  {matches.map(({ item, matchedReceiptName }) => {
+                    const selected = selectedIds.has(item.id)
+                    return (
+                      <motion.li
+                        key={item.id}
+                        variants={{
+                          hidden: { opacity: 0, y: 8 },
+                          show: { opacity: 1, y: 0, transition: { duration: 0.28, ease: EASE } },
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleMatchSelection(item.id)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-colors text-left ${
+                            selected
+                              ? 'bg-white shadow-sm'
+                              : 'bg-white/40 hover:bg-white/70'
+                          }`}
+                        >
+                          <motion.span
+                            animate={{
+                              scale: selected ? 1 : 0.9,
+                              backgroundColor: selected ? 'rgb(16 185 129)' : 'rgb(255 255 255)',
+                              borderColor: selected ? 'rgb(16 185 129)' : 'rgb(156 163 175)',
+                            }}
+                            transition={{ duration: 0.18, ease: EASE }}
+                            className="w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0"
+                          >
+                            <AnimatePresence>
+                              {selected && (
+                                <motion.span
+                                  key="tick"
+                                  initial={{ scale: 0, rotate: -45 }}
+                                  animate={{ scale: 1, rotate: 0 }}
+                                  exit={{ scale: 0 }}
+                                  transition={{ duration: 0.18, ease: EASE }}
+                                  className="material-symbols-outlined text-[14px] text-white font-bold"
+                                  style={{ fontVariationSettings: "'wght' 800" }}
+                                >
+                                  check
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </motion.span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold ${selected ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                              {item.name}
+                            </p>
+                            <p className="text-[11px] text-on-surface-variant/70 truncate">
+                              matched to &ldquo;{matchedReceiptName}&rdquo; on your receipt
+                            </p>
+                          </div>
+                        </button>
+                      </motion.li>
+                    )
+                  })}
+                </motion.ul>
+
+                <div className="flex items-center justify-end gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={dismissReconciliation}
+                    className="px-5 py-2 text-sm text-on-surface-variant font-semibold hover:bg-surface-container-high rounded-full transition-colors"
+                  >
+                    Not now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmReconciliation}
+                    disabled={selectedIds.size === 0}
+                    className="px-5 py-2 text-sm rounded-full bg-primary text-on-primary font-bold shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base">check</span>
+                    Cross off {selectedIds.size > 0 ? selectedIds.size : ''}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {reconciled && (
+              <motion.div
+                key="reconcile-done"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+                className="mb-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary-container/60 text-on-secondary-container text-sm font-semibold"
+              >
+                <span className="material-symbols-outlined text-base">task_alt</span>
+                Shopping list updated
+                <Link
+                  to="/shopping"
+                  className="ml-2 text-primary hover:underline text-xs uppercase tracking-widest font-bold"
+                >
+                  View list
+                </Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="flex gap-3 justify-center flex-wrap">
             <Link to="/fridge" className="px-8 py-3 bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold rounded-full shadow-md inline-flex items-center gap-2">
               Go to fridge

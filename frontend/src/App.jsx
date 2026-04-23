@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import AppShell from './shared/AppShell'
+import PasswordGate from './shared/PasswordGate'
 import HomePage from './modules/home/HomePage'
 import LoginPage from './modules/auth/LoginPage'
 import SignupPage from './modules/auth/SignupPage'
@@ -9,12 +10,15 @@ import MealsPage from './modules/meals/MealsPage'
 import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
 import ProfilePage from './modules/dashboard/myProfile'
+import RoadmapPage from './modules/roadmap/RoadmapPage'
+import ProcessPage from './modules/process/ProcessPage'
 import NotFoundPage from './modules/system/NotFoundPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <PasswordGate>
+      <BrowserRouter>
+        <Routes>
         {/* Standalone pages (own nav/footer) */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -28,10 +32,13 @@ export default function App() {
           <Route path="/shopping" element={<ShoppingListPage />} />
           <Route path="/upload-receipt" element={<UploadReceiptPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/roadmap" element={<RoadmapPage />} />
+          <Route path="/process" element={<ProcessPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
+    </PasswordGate>
   )
 }

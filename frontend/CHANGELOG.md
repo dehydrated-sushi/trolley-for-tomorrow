@@ -5,6 +5,392 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.16.0] — 2026-04-24
+
+### Added — `/process` page: complete research and design process, verbatim
+
+A full-content transparency page showing the research, decisions, and design process behind Trolley for Tomorrow. Intended for tutors and competing teams to see the work without ambiguity about what was researched vs. invented.
+
+**Modules:** `frontend/src/modules/process` (new), `frontend/src/shared/SideNav.jsx`, `frontend/src/App.jsx`
+
+#### Page sections (14 total)
+
+All content pulled verbatim from the team's Complete Design Process document. No trimming, no summarisation.
+
+1. **Hero** with masked-reveal headline, emerald "RESEARCH & DESIGN PROCESS" eyebrow pill, and a prominent "Open the full document" button linking to the canonical Google Doc.
+2. **Table of contents** — one-column on mobile, two-column on desktop. Anchor links to every section.
+3. **Stat callouts row** — four big-number cards (32% food insecurity, 69% single-parent rate, 4.2% meeting fruit+veg guidelines, 60% of food budgets on unhealthy food).
+4. **Six Barrier sections (A–F)** — Diet Quality, Financial Barriers, Socioeconomic Gradient, Time/Convenience, Food Literacy, Intention-Behaviour Gap. Each rendered as a collapsible `<details>` card with Findings / Possible Implications / Evidence subsections. First card expanded by default so the pattern is visible on load; the rest collapsed to keep the page scrollable. Every evidence block cites its source with an external-link icon.
+5. **Synthesis of Research Findings** — prose, five paragraphs, pulled verbatim.
+6. **Broad Lotus Blossom (9×9)** — full 81-cell grid. Dark emerald cell marks the central challenge ("Responsible and Healthy Food Consumption"), light emerald cells mark the 8 surrounding themes, default cells hold the 64 sub-themes. Horizontal scroll on narrow viewports via `overflow-x-auto` + `min-width: 880px` on the table. Small caption explains the scroll behaviour.
+7. **Focus Area** prose — narrows to budget-constrained healthy eating among food-insecure households.
+8. **Focused Lotus Blossom (9×9)** — second full grid, zoomed in on the focus area. Same rendering.
+9. **News Article Analysis** — three theme cards (budget trade-offs, decision fatigue, cooking confidence), each with source citation.
+10. **Target Audience** prose — low-income adults with moderate food insecurity.
+11. **Problem Statement** — emerald-gradient pull-quote card with noise texture, same treatment as the Roadmap feedback CTA.
+12. **Persona (Sarah)** — two-column card: left rail has avatar, name, age, location, household, income, housing; right has Background + Goals / Barriers / Behaviours / Frustrations in a 2×2 sub-grid.
+13. **Empathy Map** — six tinted quadrants (Think & Feel, Hear, See, Say & Do, then Pain, Gain). Different tint per quadrant (emerald, amber, sky, violet, red, emerald) so the reader can scan structurally.
+14. **Potential Sponsors** — five cards (Foodbank Victoria, DSS, Nutrition Australia, Woolworths, Coles) with purpose + partnership rationale.
+15. **Solution Directions (10)** — grouped into four categories: Planning-focused, Decision-support, Access/Support, Capability-building.
+16. **Concept Evaluation** — what was borrowed from Arsh's proposal and Shimmin's proposal, including the dataset lists.
+17. **Key Features (18 full)** — every feature rendered as its own card with a numbered badge and verbatim description. No consolidation, no cross-linking to the Roadmap.
+18. **Footer CTA** — "Open the full document" repeated at the bottom in a prominent emerald band.
+
+#### Animations
+
+- Masked-reveal hero (same per-word fade pattern used on the Roadmap).
+- `RevealBlock` wrapper fades every section up on `useInView({ once: true, margin: '-80px' })`.
+- Per-card fade-up on the three news article cards (60 ms stagger).
+- `prefers-reduced-motion` fallback replaces the masked-reveal with static text; the rest of the page degrades gracefully because all sections use `useInView` with `once: true`.
+- No micro-demos, no parallax, no scroll-synced timeline.
+
+#### Entry point
+
+- **Sidebar nav link** — "Our process" with the `hub` icon, added after "What's next" in `SideNav.jsx`. Placed last so existing muscle memory isn't disrupted.
+- No Dashboard widget. The page is a reference document, not a daily-use surface; it doesn't need a second discovery path.
+
+### Notes for maintainers
+
+- **The page is long by design.** Content is verbatim because the user explicitly rejected trimming. Both 9×9 lotus blossoms are rendered as real HTML tables with horizontal scroll, not simplified. All 18 features are cards. All 10 solution directions are cards. All 5 sponsors are cards. If future iterations need to trim, do it selectively (e.g., collapse all barrier cards by default) rather than cutting content.
+- **`DOC_URL` at the top of `ProcessPage.jsx`** points at the team's Google Doc. Swap if the canonical document moves.
+- **Lotus blossom cell data** lives in two arrays (`BROAD_LOTUS`, `FOCUSED_LOTUS`) at module top. Each is an array of 9 rows × 9 cells. Cell shape: `{ t: string, theme?, centre?, emphasis? }`. The `theme` flag tints the cell light-emerald, `centre` tints dark-emerald, `emphasis` tints red for the one flagged "Food environments" cell that the team wanted to highlight visually.
+- **Table semantics:** the lotus blossoms use `<table>` / `<tbody>` / `<tr>` / `<td>` (not `<div>` grid) because they *are* tabular data. Screen readers will navigate them as tables.
+- **Collapsible sections** use native `<details>`/`<summary>` — no JS state, no aria bookkeeping. The browser handles it.
+- **Bundle size** jumped ~75 kB with this page (from 647 to 722 kB gzipped is 183 kB now). Content is static strings so the cost is one-time; no per-user overhead.
+- **Citation links** all open in a new tab with `rel="noopener noreferrer"` and an `aria-label` that includes the full source name, so screen readers announce them clearly. Every external link has a small `open_in_new` icon.
+
+---
+
+## [1.15.0] — 2026-04-24
+
+### Added — Client-side password gate on app entry
+
+A glass-morphic password overlay that renders in front of the whole app until the correct password is entered. Deterrent for casual viewers (other FIT5120 teams stumbling into the demo URL), not a real security boundary.
+
+**Modules:** `frontend/src/shared/PasswordGate.jsx` (new), `frontend/src/App.jsx`
+
+#### What it does
+
+- On first visit: a backdrop-blur overlay covers the entire viewport with a centred glass card (`rounded-3xl`, `backdrop-filter: blur(32px)`, subtle radial emerald tint on the scrim). Animated lock icon on the card pulses at 2.2 s intervals.
+- Password input is autofocused, emerald focus ring replaces the browser's default blue. Submit arrow fades in next to the input when the field has characters.
+- Correct password: card flashes emerald-100 (220 ms), then scale-fades out (320 ms), then the scrim itself fades out. Total exit ~700 ms. Full app becomes interactive.
+- Wrong password: input shake (`x: [0, -6, 6, -4, 4, 0]` over 420 ms) + red border flash (620 ms fade back) + "That's not the password." error text fades in below. Input clears, refocuses. Error clears on next keystroke.
+- Unlock persists in `localStorage` under `trolley_gate_unlocked_v1`. On subsequent visits the gate never renders: no flash, no delay, no user-visible overhead.
+
+#### Deliberately not security
+
+- The password is stored as a **SHA-256 hex hash** in the source (`EXPECTED_HASH`), not the literal word. A grep on the compiled JS bundle won't surface the password string. Raises the floor against casual source-view; still bypassable.
+- Bypass is still ~5 seconds for anyone with DevTools: `localStorage.setItem('trolley_gate_unlocked_v1', 'true')` and refresh.
+- The **backend API is not gated by this**. `curl` against any endpoint returns data as before. Real auth is tracked separately on the iteration 2 security roadmap.
+- The app tree is fully rendered behind the blurred scrim (which is the whole point of the "glass" aesthetic). Someone with a DOM inspector can still read content through the blur. This is a "looks cool / keeps casual classmates out" feature, not a "stops people" feature. Documented at the top of the component.
+
+#### Accessibility + polish
+
+- Wrapped app tree gets the **`inert` attribute** (set via ref + `setAttribute` for cross-React-version compatibility) while locked. Prevents keyboard tab-navigation from focusing inputs under the blur.
+- `prefers-reduced-motion` fallback: skips card drop-in, lock pulse, shake keyframes, and scrim fade. Instant render, instant unlock transition.
+- Enter key submits; autofocus on both initial mount and after wrong-password clears.
+- `aria-modal="true"`, `role="dialog"`, `aria-labelledby`, and `aria-live="polite"` on the error text.
+
+#### Adjustments from the original spec
+
+- **Dropped the 500 ms pre-delay** on the card drop-in. The original plan had the backdrop fade in for 400 ms, then the card drop in after another 500 ms — that's nearly a second of app visible unblurred on first load. Gate is up instantly now; the card uses a tight spring (260 stiffness / 22 damping) to feel like it was always there.
+- **Hashed the password.** `'hunger' === input` became `sha256(input) === '<precomputed>'`. 5 minutes of work, means the literal word doesn't appear in the bundle.
+- **Added `inert` on the wrapped app tree** in addition to `pointer-events-none`. The spec blocked pointer events but not keyboard focus traversal. Tab would have leaked focus into forms under the blur without this.
+
+### Notes for maintainers
+
+- To test the locked state: `localStorage.removeItem('trolley_gate_unlocked_v1')` and refresh, or open an incognito window.
+- To change the password: recompute `printf "%s" "<new>" | shasum -a 256` and swap the `EXPECTED_HASH` constant. No user migration needed — any pre-existing unlocked localStorage entries remain valid since the key doesn't encode which password unlocked it.
+- The storage key is versioned (`_v1`). If the gate's persistence semantics change (e.g., add an expiry or tie unlock to a server token), bump to `_v2` so existing installs re-prompt.
+- Gate is mounted **outside** `<BrowserRouter>` in `App.jsx` so it covers every route — the public `/` homepage, `/login`, `/signup`, and all `/dashboard` / `/fridge` / etc. shell routes. Deliberate: the marketing homepage is just as scrape-worthy as the app itself.
+- `PasswordGate` renders its overlay directly (no portal) because `App.jsx` is itself above any backdrop-filter ancestor. If you ever nest the component deeper (e.g., inside `AppShell`), wrap the `AnimatePresence` tree in `createPortal(..., document.body)` the same way `RecipeDetailModal` does, or the scrim will resolve against the nearest filtered ancestor.
+
+---
+
+## [1.14.0] — 2026-04-24
+
+### Added — TopNav recipe search
+
+The decorative `Search recipes...` input in the top nav is now functional. Spotlight-style keyboard-driven tool; pill input with attached dropdown, not a modal.
+
+**Modules:** `backend/modules/meal_plan` (new `/search` endpoint), `frontend/src/shared/SearchDropdown.jsx` (new), `frontend/src/shared/TopNav.jsx`
+
+#### Backend
+
+- `GET /api/meals/search?q=<query>&limit=8` — `ILIKE '%q%'` against `recipes.name`, prefix matches rank above substring matches, ties broken alphabetically on `LOWER(name)`. Returns `{ id, name, calories, minutes, match_type }`. 2-character minimum enforced server-side.
+
+#### Frontend
+
+- **`shared/SearchDropdown.jsx`** — new component. Focus lights an emerald ring (kills the browser's default blue which clashed with the palette). Typing debounces 250 ms then fires, with a sequence counter guarding against out-of-order responses.
+- **Attached dropdown** — when open, the input rounds only its top corners and the dropdown takes the bottom radius, visually becoming one shape. Rejected the floating-panel-with-gap alternative as it reads like a legacy dropdown.
+- **Result row** — 40×40 thumbnail (Pixabay-backed via the existing `/recipe-image/:id` endpoint, first-letter emerald fallback on 404), recipe name with matched substring bolded in emerald, kcal + minutes meta in a monospace sub-line, and an `↵` hint on the active row.
+- **Keyboard navigation**: Arrow keys move highlight, Enter navigates, first Esc closes dropdown, second Esc blurs the input. Mouse-hover also moves highlight so keyboard and mouse stay in sync.
+- **Loading affordance** — thin 2 px emerald bar under the input while fetching (not an icon swap on the magnifying glass, which is jarring at small sizes and triggers the classic "did I do anything?" problem).
+- **Selection closes the loop** — picking a result navigates to `/meals?highlight=<id>`, which reuses the existing scroll-and-pulse deep link and auto-expand-on-highlight behaviour from the Meals page.
+
+### Notes for maintainers
+
+- The shared layout surfaces (TopNav ↔ Meals page ↔ Shopping page rails ↔ Favourites modal) all converge on the same `/meals?highlight=<id>` deep-link pattern. If you change the highlight contract (param name, consumed-immediately behaviour, or the pulse duration), grep for `?highlight=` across the frontend — four surfaces depend on it.
+- Don't lower the 2-character `MIN_QUERY_LEN` threshold. Single-character queries return noisy results and load the backend with every keystroke.
+- The `fetchSeqRef` sequence counter inside `SearchDropdown` is load-bearing. Without it, a slow response for "co" can arrive after the faster response for "coco" and overwrite the newer results with stale ones. Tested manually by throttling the network tab.
+
+---
+
+## [1.13.0] — 2026-04-24
+
+### Added — Forward-looking `/roadmap` page
+
+A dedicated route that tells users (and mentors) what's shipping next. Forward-looking only; no recap of iteration 1.
+
+**Modules:** `frontend/src/modules/roadmap` (new), `frontend/src/shared/SideNav.jsx`, `frontend/src/modules/dashboard/DashboardPage.jsx`, `frontend/src/App.jsx`
+
+#### Page composition
+
+- **Hero** — masked-reveal headline + subhead, per-word fade-in with a 30 ms stagger (not a typewriter; that pattern is already used on `HeroDemo`). Emerald "PRODUCT ROADMAP" eyebrow pill above the title with a pulsing dot.
+- **Iteration 2 · In development** — seven feature cards in a 2-column grid. Each card has a pulsing emerald status dot + "In dev" tag.
+- **Iteration 3 · Planned** — six feature cards with dashed border, slightly reduced opacity, muted slate dot + "Planned" tag.
+- **Static dashed divider** between sections with a small caption ("Further out"). No animated-timeline-line drawing because it jitters on low-end hardware and `useInView`-driven reveals already pace the content.
+- **Feedback CTA** — full-width emerald-gradient card at the bottom with a `mailto:` placeholder linking to the team (swap for the Google Form URL when finalised).
+
+#### Micro-demos (6 of 13 cards)
+
+- **Expiry tracking** — 7×4 mini calendar, one date pulsing red with a "Milk · 2d" chip above. Copy mentions the optional recipe-prioritisation toggle that surfaces expiring items in meal recommendations.
+- **Prices on the shopping list** — three ingredient rows with `$` amounts staggering in, plus an "Estimated total" tweened via `AnimatedNumber`.
+- **Estimated meal cost** — three recipe rows with `$` amounts ticking up via `AnimatedNumber`.
+- **Real user profiles** — emerald-gradient avatar + name + "✓ Synced" chip + four preference pills (Vegetarian / Family of 4 / $150 per week / No nuts) staggering in.
+- **Nutritional information** — four coloured bars filling to protein / carbs / fats / fiber percentages with live counters.
+- **Fridge YOLO scanning** — scaled reimplementation of the AR scan (dark backdrop, SVG silhouettes, cyan bounding box + corner brackets, tiny "🍏 Granny Smith · 88%" detection card, looping scan line).
+
+The remaining 7 cards are elegant static cards (icon + title + description + status chip): Better receipt OCR in iteration 2; Food map, Best prices from your history, Community support, Your food insights, Welfare food sources, Smart waste tracker in iteration 3. Rejected "animation on every card" — 13 bespoke demos is 8–10+ hours of work where most don't teach the user anything the description doesn't already say. Ship where the motion teaches; static where it doesn't.
+
+#### Iteration 3 roster (6 cards)
+
+1. **Food map** — community fridges, affordable grocers, farmers markets
+2. **Best prices from your history** — route shopping runs to cheapest store per-basket using receipt history
+3. **Community support** — user-shared discount tips and store finds; entries auto-populate the food map
+4. **Your food insights** — interactive charts for weekly spend, waste, other facts from history
+5. **Welfare food sources** — directory of food-bank programs, community meals, emergency relief
+6. **Smart waste tracker** — YOLO rot detection + user-confirmed "cooked with X" + "past expiry but still in fridge" diffs
+
+#### Entry points (2, not 4)
+
+- **Sidebar nav link** — "What's next" with `upcoming` icon, last in the list.
+- **Dashboard Quick Actions row** — appended as the 4th row with a pulsing green "NEW" badge. Discoverable without dominating the hero action list.
+- **Rejected** the AI's suggested Footer link (noise) and Made-By-modal CTA (wrong context — users open that for team credits).
+
+#### Copy conventions established
+
+- **No em dashes in user-facing copy.** They survive only in code comments. Replaced with periods, colons, or restructured phrasing across the hero, every card description, and both section descriptions. Per explicit user request: em dashes read as AI-generated filler to many readers.
+- **No week labels on cards.** Originally shipped with "Week 8 / Week 9 …" subtitles; dropped because a public roadmap shouldn't commit to sprint-level dates it can't guarantee. The pulsing-dot status chip conveys relative priority without the overpromise.
+
+### Notes for maintainers
+
+- Roadmap content lives in two arrays at the bottom of `RoadmapPage.jsx`. Editing a card is a one-entry change.
+- The YOLO card **deliberately doesn't import** `ARScanModal` — it reimplements a smaller version inline. Reusing the full modal would drag in body-scroll-lock, Escape handling, and the full photo backdrop for what should be a ~200 px card preview.
+- `FEEDBACK_URL` is a `mailto:` stub at the top of `RoadmapPage.jsx`. Swap to the Google Form URL when the team finalises it.
+- Every micro-demo is gated behind an `active` boolean that only flips to true once the card enters the viewport (via `useInView({ once: true })`). Fast-scrolling past a card doesn't waste cycles animating something the user won't see.
+- `prefers-reduced-motion` is handled at the hero level (masked-reveal becomes static) and at the demo level (users' systems suppress the animated transitions natively while content stays intact).
+- **Do not add em dashes to user-facing copy.** Project-wide convention established this session.
+
+---
+
+## [1.12.0] — 2026-04-24
+
+### Added — Manual fridge CRUD + AR scan preview modal
+
+Two fridge-page features landed together. The first is real functionality (users can finally add/edit/remove items without going through a receipt upload); the second is a deliberately flashy "coming soon" preview that gives mentors a taste of where iteration 2 is going.
+
+**Modules:** `frontend/src/modules/fridge`, `backend/modules/fridge`
+
+#### Manual add / edit / delete (real feature)
+
+- **`+ Add item`** header button opens a modal with a single compact row (name, quantity, price). Autofocused name input; quantity is free-text to match the receipt review schema. Live category classification on a 300 ms debounce via `/api/ingredients/classify` — a coloured chip spring-materialises next to the input once a category is known, clickable to override.
+- **Duplicate-name detection** surfaces a tertiary-container banner with a `+1 existing` shortcut (PATCHes the existing row's qty) when the typed name matches a current fridge item case-insensitively. User can still add as a separate entry.
+- **Card-fly-to-grid morph** on save — same pattern as the Shopping page's chip-to-list morph: capture the button's bounding rect, render a fixed-position ghost, animate to the grid's first cell over 650 ms. The real card fades up in place underneath.
+- **Hover actions** (pencil, ×) on each card for edit and remove.
+- **Inline undo on delete**, 4 s window. No confirm dialog — the clicked card overlays with a surface-high panel showing "Removed {name}" + an **Undo** pill and a linear 4 s progress bar. Timer fires the real DELETE if undo isn't clicked.
+
+Backend (`backend/modules/fridge`) — new `POST`, `PATCH`, `DELETE` endpoints reusing the `receipt_items` table with sentinel `receipt_filename = 'manual_entry'` / `receipt_path = 'manual'` values so manual and OCR provenances share one schema. Downstream consumers (Meals matching, Shopping staples rail, budget calculation) treat manual rows identically to scanned ones — a user's typed chicken breast should count for meal matches exactly like a receipt-scanned one.
+
+#### AR scan preview modal (iteration 2 placeholder)
+
+- **`Scan fridge` header button** (on-surface pill with a cyan `preview` badge) opens a self-contained cyberpunk modal:
+  - Scale-from-scaleY-0.02 curtain entrance (evokes a display powering on).
+  - `AR_SYSTEM_BOOTING...` typewriter → solid-cyan `AR_SYSTEM_ACTIVE` status pill.
+  - Scan-line sweep (1.5 s cyan-glow gradient, repeats on a 1.8 s loop once detections are in).
+  - Four hardcoded detections framed with animated L-bracket corners (40 ms stagger between corners) and glassmorphic detection cards (monospace uppercase for system text, display font for item names; cyan border for new, emerald for existing).
+  - FPS/LAT HUD with realistic number flicker (±1 fps, ±3 ms, 500–900 ms jitter period).
+  - Preview ribbon `PREVIEW · SHIPPING IN ITERATION 2` top-center.
+  - Clicking any card's `+ ADD` drops an `ITERATION 2 FEATURE` banner — the only "the truth" surface in the modal; everything else is preview-as-theatre.
+- **Synthesized backdrop** — dark radial gradient + three horizontal shelf lines + four CSS item silhouettes. Zero photo dependencies. The modal runs self-contained.
+- **`prefers-reduced-motion` fallback** skips the animations but preserves the static detected state. Visual polish intact without the motion.
+- **Deliberately cyan-accented, not emerald** — reads as a different system temporarily taking over the screen, not part of the regular app chrome.
+
+### Notes for maintainers
+
+- The manual-add and AR modals are both in `frontend/src/modules/fridge/` alongside `FridgeView.jsx`. Tree: `ManualAddModal.jsx`, `ARScanModal.jsx`.
+- Ghost-morph pattern is now used twice (`MorphGhost` on Shopping, `FridgeCardMorph` on Fridge). If a third surface needs the same effect, lift to `shared/` at that point. Don't pre-lift — the two copies are small and diverge on surface-specific details.
+- `ARScanModal` uses inline hex-rgb colours for cyan and emerald accents rather than theme tokens, intentionally — theming it would blend it back into the app and lose the "foreign system" feel that makes the preview land.
+- `deleteTimersRef` cleanup on unmount fires outstanding DELETE requests so a mid-window navigation doesn't leave ghost rows in the DB after a refresh.
+
+---
+
+## [1.11.0] — 2026-04-24
+
+### Added — Receipt reconciliation · Favourites modal · Shopping page polish
+
+Cross-cutting follow-up to 1.10.0. Closes the loop between the shopping list and the receipt upload, gives starred recipes a proper home, and tightens the Shopping page's visual hierarchy + motion language.
+
+**Modules:** `frontend/src/shared`, `frontend/src/modules/receipt`, `frontend/src/modules/meals`, `frontend/src/modules/shopping`
+
+#### Receipt reconciliation (`modules/receipt`)
+
+- **Post-commit panel** on the Upload-receipt page. After the user confirms items into their fridge, the page computes token-overlap matches between the confirmed names and the user's unchecked shopping list items. Any hits render as a checklist (pre-ticked) with a "Cross off N" button that bulk-checks the matched shopping-list items. Panel collapses to a small "Shopping list updated · View list" confirmation row after action.
+- Matches are frontend-only (no backend round-trip) — the fuzzy matcher lives in `shared/shoppingList.js::findUncheckedMatches`. Token normalisation, stopword stripping, trailing-s stemming. Any single meaningful token in common counts as a match; the user confirms before anything changes, so a slightly loose matcher is the right tradeoff.
+
+#### Favourites modal (`modules/meals`)
+
+- **Trigger pill** appears in the Meals filter row only when `favouriteIds.size > 0` — shows "★ N favourites" with a live count. Springy hover, entry animation.
+- **Scrollable modal** (scrim + backdrop-blur, scale-in modal) lists every starred recipe with the same sort/filter grammar as the Meals page. Sort options: Recently starred, Highest protein, Lowest calories, Highest calories. Filters: tag chips (computed client-side from nutrition fields to mirror `meal_plan.routes._compute_tags`), Hide-drinks toggle.
+- **Detail view inside the modal**: clicking any row crossfades the list for a full recipe view — hero image, tag pills, meta row, ingredients (2-col stagger-fade-in grid), numbered steps, nutrition grid. Back button (or Escape) returns to the list. A secondary "Open on Meals page" action in the footer jumps to the Meals page for users who want the recommendation-context view.
+- Modal works even when the recipe is not on the currently-rendered Meals page (pagination / filters can hide it) — data is fed from the favourites payload, not from `/api/meals/recommendations`.
+
+#### Meals page (`modules/meals`)
+
+- `?highlight=<id>` deep-link now also **auto-expands the card's detail panel** on arrival. Landing on a collapsed card after following a link would have required a second click; users now land with ingredients + steps open.
+- `favouriteRecipes` (full array) kept in state alongside the existing `favouriteIds: Set<number>`. Toggle handler updates both atomically; on add, the current recipe record is lifted from `recommendations` into the array with a just-now `favourited_at` so "Recently starred" ordering is correct before the next refetch.
+
+#### Shopping page (`modules/shopping`) — hierarchy + motion pass
+
+- Each recommendation rail now renders as a **self-contained card** (white surface, rounded, 1 px border, subtle shadow) with a coloured icon badge (emerald / indigo / amber), a proper display header, and a lighter subhead. All-caps kickers dropped.
+- New **"Your list" divider** with em-dashes and a small caption visually separates the recommendations zone from the manual list.
+- **Rail stagger on page entrance** — 90 ms between rails (`staggerChildren` variants on the grid wrapper; each Rail consumes the variant).
+- **Strikethrough wipe** on check — replaces CSS `line-through` with an animated 1.5 px bar that scales from left (`transform-origin: left`, 280 ms).
+- **Amber flash with shake** on duplicate-add — replaced the previous yellow pulse with a softer amber (`rgba(251,191,36,*)`) plus a 600 ms horizontal shake (`x: [0, -4, 4, -3, 3, 0]`). Triggered by the same `shopping:flash` CustomEvent from either the rail chip or a Meals-page `+` attempt.
+- **Chip-to-list morph** — clicking `+` on any rail chip captures the chip's bounding rect, renders a portal-style `MorphGhost` pill at that position, and flies it to the "Your list" heading over 600 ms with a scale dip + fade-out. Teaches the user's eye that "add" means "the thing went over there" instead of relying on them to notice the list has grown by one.
+
+#### Shared primitives changed
+
+- **`shared/toast.js` → `shared/toastBus.js`** — rename forced by a case-insensitive filesystem collision with `Toast.jsx`. Vite was resolving `from './Toast'` to the event bus (no default export) instead of the component, blanking the whole app. Three import sites updated (`Toast.jsx`, `MealsPage.jsx`, `ShoppingListPage.jsx`).
+- **`shared/shoppingList.js`** now also exposes `markChecked(ids)` (bulk-check, idempotent, single subscriber notification) and `findUncheckedMatches(receiptItems)` (the fuzzy matcher described above).
+
+### Notes for maintainers
+
+- Never name a `.js` and `.jsx` in the same directory whose names differ only by case. Case-insensitive filesystems (default macOS APFS, Windows NTFS) will collapse the import lookup and Vite's extension-resolution order will bite.
+- `findUncheckedMatches` is deliberately loose (any one token in common wins). The confirm-before-mutate pattern in the receipt page absorbs the false-positive cost. Don't tighten the matcher without also changing the UX contract.
+- The favourites modal's tag computation intentionally duplicates `meal_plan.routes._compute_tags` thresholds. If those thresholds shift on the backend, mirror the change in `FavouritesModal.jsx::deriveTags`. The 'drink' tag is a name-regex fallback because the favourites endpoint doesn't include ingredient classifier output.
+- `MorphGhost` runs on a fixed-position layer; it reads `toRect` once on mount, so mid-flight scrolls will miss the target. Acceptable at current scroll velocity; revisit if ever noticeable.
+- `detailRecipe` state in the favourites modal is intentionally ephemeral — closing the modal resets it, so reopening always lands on the list. Routing a `?recipe=<id>` param into the modal was considered and rejected (URL state vs. transient UI).
+
+---
+
+## [1.10.0] — 2026-04-23
+
+### Added — Favourites + Add-to-shopping + Shopping List rebuild
+
+Cross-cutting feature pass that makes the shopping list the page where a user actually plans what to buy, wired to a new favourites system and a + button on every missing ingredient in the Meals view.
+
+**Modules:** `frontend/src/shared`, `frontend/src/modules/meals`, `frontend/src/modules/shopping`
+
+#### New shared primitives
+
+- **Toast** (`shared/Toast.jsx` + `shared/toastBus.js` event bus) — single-slot, fixed bottom-right, 3 s auto-dismiss, replaces-latest, optional Undo action. Mounted once in `AppShell.jsx`. `aria-live="polite"` so screen readers announce politely. Three tones: default (emerald), muted, error.
+- **shoppingList** (`shared/shoppingList.js`) — localStorage-backed list CRUD with cross-tab `storage` event subscription. Items categorised instantly by a small local keyword map (covers ~80 % of common grocery inputs); misses fall through to "Other" and are refined asynchronously by `/api/ingredients/classify` when the response lands. Versioned storage key (`trolley_shopping_list_v1`) for future schema changes.
+
+#### Meals page (`modules/meals`)
+
+- **Favourite star** in the title row of each `RecipeCard`, server-persisted via the new `/api/profile/favourites` endpoints. Optimistic toggle with revert-on-error.
+- **Clickable chips** replace the "Still need: X, Y, Z" text — each missing ingredient is a `+` chip, items already in the shopping list render as muted ✓ pills.
+- **"Add all missing"** button batch-adds everything on the card, with Undo on the toast.
+- **`?highlight=<id>` deep link** — when the Shopping page's rail-popover links land here, the target card scrolls into view and runs a 1.6 s emerald shadow-pulse. URL param is consumed immediately; `activeHighlight` state carries the animation through.
+
+#### Shopping page (`modules/shopping`) — full rebuild (v1 → v2)
+
+- Top zone: three rails powered by `/api/shopping/recommendations` — "You buy this often" (staples), "Complete a recipe" (top matches' missing ingredients), "From your favourites" (missing ingredients from starred recipes). Hover/focus on rail-2/3 chips reveals a popover with clickable recipe links that route back to Meals via `?highlight=`.
+- Bottom zone: manual shopping list grouped by nutritional category. Text-to-add with Enter submission. Checked items strikethrough and drop to the bottom of their group. Clear-checked + Clear-all (with confirm) controls.
+- Source badge (`recipe`, `staple`, `favourite`) on non-manual items so provenance stays visible.
+- Duplicate-add → 850 ms yellow flash on the existing row via `shopping:flash` CustomEvent + muted toast. Works across both rails and Meals-page adds.
+
+### Notes for maintainers
+
+- The old `/api/shopping/list` endpoint is preserved server-side; this page no longer calls it.
+- `CATEGORY_ORDER` in `ShoppingListPage.jsx` controls vertical grouping. Mirror any changes in the Meals legend.
+- The local keyword map in `shared/shoppingList.js::_KEYWORD_MAP` is intentionally short — extending it is cheap and improves classify-hit rate, but anything not matched still gets backend refinement, so don't fear the cold path.
+- Toast slot is single-instance by design. A fresh `toast.show()` replaces whatever's on screen — queueing is almost always worse UX than showing the latest action.
+- Favourites are server-persisted (single-user, `user_id = 1`); shopping list is localStorage (per-device). Inconsistent by intent: favourites follow the user, the shopping list follows the moment.
+
+---
+
+## [1.9.0] — 2026-04-23
+
+### Changed — Trolley Tips is now an auto-rotating, hover-pausable carousel
+
+**Module:** `frontend/src/modules/dashboard`
+
+- The static single-tip widget from 1.8.0 becomes a carousel: a new FoodKeeper tip every 9 seconds, with a crossfade + 10 px vertical shift (`opacity 0 → 1`, `y 12 → 0 → -8`, 450 ms, cubic-bezier `[0.22, 1, 0.36, 1]`). No 3D flips, no slides, no scale — the card is a stage, the content rotates through it.
+- **Progress ring traces the card's full perimeter**, not a top-edge bar. Rendered as an SVG `<rect>` with matching rounded corners (`rx` chosen to align with the card's `rounded-[2rem]`), sized via a `ResizeObserver` so it follows the card as the layout flexes. A dim emerald-300 background stroke at `opacity 0.18` defines the track; a bright emerald-300 stroke at `opacity 0.85` paints clockwise over it, driven by `strokeDashoffset` going `1 → 0` over each 9 s window. `pathLength="1"` normalises the dasharray so the same offset value works regardless of rendered perimeter length. `strokeLinecap="round"` rounds the trace's leading edge for a polished feel. Resets each rotation, freezes mid-trace on hover.
+- **Hover / focus pauses the timer in place.** Moving away resumes the progress from where it paused — not from 0. Implemented by driving the progress with a framer-motion `MotionValue` and calling `.pause()` / `.play()` on the returned playback controls imperatively. Focus pause uses `e.currentTarget.contains(e.relatedTarget)` so tabbing into the back button doesn't unpause.
+- **Back button appears only on hover/focus**, and only when a previous tip is actually available. Positioned bottom-right, 10 px uppercase pill with an arrow icon, fades in on `x: 8 → 0`. Clicking it shows the previously displayed tip; the tip that was on screen is parked as the "next", so forward rotation resumes smoothly from there.
+- **Memory footprint is bounded**: at any moment we hold at most three tips — previous (for back button), current (on screen), next (pre-fetched to make rotations instant). No history beyond one level back.
+- **Pre-fetch on each rotation**: while the current tip is on screen, the next one is fetched in the background. Rotations therefore swap without a visible network delay. Cold-path (pre-fetch in flight when rotation fires) falls back to a direct fetch.
+- **Lightbulb and eco drift animations are unchanged and deliberately kept outside the AnimatePresence**, so the rotating content doesn't force a re-render of those decorative elements.
+- **Accessibility**: outer card is `tabIndex={0}` so keyboard users can reach and pause it. Back button has `aria-label="Show previous tip"` and gains focus-visible ring styling. All pause/resume logic works identically for hover and keyboard focus.
+
+### Notes for maintainers
+
+- Rotation duration is a module constant `TIP_DURATION_S = 10`. Change if copy testing shows people need more time.
+- The tip-change effect re-runs on every `tip` state update; `rotateRef` holds the latest `rotate` callback so the effect's dep array stays `[tip, progress]` and the animation doesn't get cancelled mid-progress when the `nextTip` pre-fetch completes.
+- If the `/api/foodkeeper/tips` endpoint is unreachable the fallback "Revive Your Greens" tip is displayed and no rotation happens (since we never get a second tip to rotate to) — the behaviour gracefully collapses to the 1.7.x static experience.
+- `FALLBACK_TIP` is exported-shaped but not exported — keep it module-local; it's a last-resort UI string, not a shared resource.
+- MotionValue-based progress bar bypasses React reconciliation per frame, so the CPU cost of the rotation itself is near-zero. The rotation cost is dominated by the `apiFetch` network round-trip, which is debounced to one concurrent request per rotation.
+
+---
+
+## [1.8.0] — 2026-04-23
+
+### Changed — Dashboard Trolley Tips now sourced from USDA FoodKeeper
+
+**Module:** `frontend/src/modules/dashboard`
+
+- The hardcoded "Revive Your Greens" tip on the Dashboard is replaced with a random deduplicated tip fetched from the new backend endpoint `GET /api/foodkeeper/tips?limit=1`. Title becomes the FoodKeeper product name (e.g. "Sugar", "Bagel", "Canned goods"); body is the USDA-authored tip text.
+- **Attribution link** added beneath the tip body: small uppercase link reading *"Source · USDA FSIS FoodKeeper Data"*, opening https://catalog.data.gov/dataset/fsis-foodkeeper-data in a new tab. Required by data.gov's attribution conventions and also demonstrates real source-backed content for tutor review.
+- **Graceful fallback**: if the fetch fails (endpoint not reachable, tables not seeded, CORS error, etc.) the previous hardcoded "Revive Your Greens" tip is shown instead. The Dashboard never renders a blank tip card.
+- Independent `apiFetch` call inside `DashboardPage.jsx`'s `useEffect` — runs in parallel with the fridge and budget fetches, failures don't cascade.
+
+### Notes for maintainers
+
+- Backend dependency: see `backend/modules/foodkeeper/` and `backend/scripts/seed_foodkeeper.py`. The seed must have been run at least once against the target database for real tips to appear — until then, the fallback renders.
+- Tip title currently uses the FoodKeeper product name verbatim. Some product names are long or slightly technical (e.g. "Chicken broth/stock/consommé"); rendering is with the existing headline style (no CSS `capitalize`, since product names already have proper casing and the slash/special chars would render oddly under title-case transform).
+- No new npm dependencies. Feature is a `useState` + single `apiFetch`.
+
+---
+
+## [1.7.0] — 2026-04-23
+
+### Added — Pixabay recipe hero photos (graceful fallback)
+
+**Module:** `frontend/src/modules/meals`
+
+- **`<RecipeHeroImage recipeId={id} />`** overlays every recipe card's hero with a photo fetched from the new backend endpoint `/api/meals/recipe-image/:id`. The image is absolutely positioned over the existing gradient-plus-category-icon layer, so when the request returns 404 (backend has no Pixabay match, or `PIXABAY_API_KEY` isn't set), the component unmounts itself and the gradient hero shows through — no broken-image placeholder, no layout shift.
+- Image fades in over 300 ms on load (`opacity-0` → `opacity-100`) so there's no hard pop when a cached photo arrives.
+- `loading="lazy"` on the `<img>` so off-screen cards don't trigger Pixabay round-trips until they scroll into view — important for the 20-per-page grid so the backend isn't slammed with 20 simultaneous Pixabay calls on first load.
+- Match-score / "No shopping" / "Need N items" badges moved to `z-10` so they remain above both the gradient icon and any loaded photo.
+
+### Added — Pixabay attribution line
+
+**Module:** `frontend/src/modules/meals`
+
+- Muted single-line credit below the recipe grid: *"Recipe photos from Pixabay. Cards without a match fall back to a category-coloured hero."* Required by Pixabay's API TOS ("show your users where the images and videos are from, whenever search results are displayed") and also tells the user *why* some cards have photos and some don't — so missing photos read as a deliberate design choice, not a bug.
+- Only rendered when the grid actually has at least one recipe; empty-state doesn't need the disclaimer.
+
+### Notes
+
+- The frontend now imports `API_BASE` from `src/lib/api.js` so the hero `<img>` can hit the absolute backend URL directly. `apiFetch` stays unchanged; `<img>` can't flow through it because we need the raw URL, not a JSON response.
+- No new dependencies. The whole feature sits on an `<img>` element plus `useState`.
+- If `PIXABAY_API_KEY` is absent in the backend's environment, every `/api/meals/recipe-image/:id` call returns 404 and every card falls back gracefully. The feature is fully optional — nothing breaks when the key isn't there.
+
+---
+
 ## [1.6.1] — 2026-04-23
 
 ### Changed — Meals page sort set rationalised; tag icons + egg icon fixed; legend expanded

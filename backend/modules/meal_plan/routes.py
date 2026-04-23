@@ -1,7 +1,12 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, abort, jsonify, request, send_from_directory
 from core.database import db
 from sqlalchemy import text
 
+from modules.meal_plan.image_service import (
+    IMAGE_DIR,
+    fetch_and_cache,
+    get_cached_image,
+)
 from modules.nutrition.classifier import classify
 from modules.nutrition.dietary import (
     is_recipe_allowed,
@@ -184,6 +189,126 @@ def _parse_int(raw, default, minimum=1, maximum=None):
 def get_tags():
     """Return the list of available tags + their descriptions (for the filter UI)."""
     return jsonify({"tags": TAG_DEFINITIONS}), 200
+
+
+@bp.route("/recipe/<int:recipe_id>", methods=["GET"])
+def get_recipe(recipe_id):
+    """Fetch a single recipe by id, for the search-result detail modal and
+    any other surface that needs a full record without going through the
+    recommendations pipeline.
+
+    Returns ingredients + steps pre-split the same way the recommendations
+    and favourites endpoints do, so one client-side renderer can consume
+    any of the three shapes.
+    """
+    row = db.session.execute(text("""
+        SELECT r.id, r.name,
+               r.ingredients_clean, r.steps_clean,
+               r.calories, r.protein, r.carbohydrates, r.sugar,
+               r.total_fat, r.saturated_fat, r.sodium,
+               r.minutes, r.n_ingredients
+        FROM recipes r
+        WHERE r.id = :rid
+    """), {"rid": recipe_id}).fetchone()
+
+    if row is None:
+        return jsonify({"error": "Recipe not found"}), 404
+
+    m = dict(row._mapping)
+    m["ingredients"] = [
+        i.strip() for i in (m.pop("ingredients_clean") or "").split("|") if i.strip()
+    ]
+    m["steps"] = [
+        s.strip() for s in (m.pop("steps_clean") or "").split("|") if s.strip()
+    ]
+    return jsonify({"recipe": m}), 200
+
+
+@bp.route("/search", methods=["GET"])
+def search_recipes():
+    """Typeahead recipe search for the TopNav search bar.
+
+    - `q`: query string. < 2 chars returns [] (too noisy).
+    - `limit`: row cap, default 8, maxed at 20.
+
+    Ranking: prefix matches first (so typing "coco" surfaces "coconut curry"
+    before "chocolate coconut cake"), then other substring matches. Within
+    each tier, sort alphabetical on name for stable output.
+
+    Returns a compact shape. Clients fetch full records via the existing
+    recommendations / favourites endpoints if they need more than a name
+    and an id to land on the right recipe card.
+    """
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"query": q, "results": []}), 200
+
+    try:
+        limit = int(request.args.get("limit", 8))
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+
+    like_any = f"%{q}%"
+    like_prefix = f"{q}%"
+
+    rows = db.session.execute(text("""
+        SELECT
+            id,
+            name,
+            calories,
+            minutes,
+            CASE
+                WHEN LOWER(name) LIKE LOWER(:prefix) THEN 1
+                ELSE 2
+            END AS match_rank
+        FROM recipes
+        WHERE name ILIKE :any
+        ORDER BY match_rank ASC, LOWER(name) ASC
+        LIMIT :lim
+    """), {"any": like_any, "prefix": like_prefix, "lim": limit}).fetchall()
+
+    results = [
+        {
+            "id":         r._mapping["id"],
+            "name":       r._mapping["name"],
+            "calories":   r._mapping["calories"],
+            "minutes":    r._mapping["minutes"],
+            "match_type": "prefix" if r._mapping["match_rank"] == 1 else "contains",
+        }
+        for r in rows
+    ]
+
+    return jsonify({"query": q, "results": results}), 200
+
+
+@bp.route("/recipe-image/<int:recipe_id>", methods=["GET"])
+def get_recipe_image(recipe_id):
+    """Serve a cached Pixabay photo for a recipe.
+
+    404 means "no image" — either Pixabay had no hit (persisted negative) or
+    the cache hasn't been populated and the feature is disabled (no
+    PIXABAY_API_KEY). The frontend treats 404 as "render the gradient +
+    category-icon hero" and never shows a broken-image placeholder.
+    """
+    cached = get_cached_image(recipe_id)
+    if cached is None:
+        row = db.session.execute(
+            text("SELECT name FROM recipes WHERE id = :rid"),
+            {"rid": recipe_id},
+        ).fetchone()
+        if row is None:
+            abort(404)
+        cached = fetch_and_cache(recipe_id, row._mapping["name"])
+        if cached is None:
+            # No API key configured, or cache write failed — no write happened,
+            # so next request will re-attempt. Respond 404 for this one.
+            abort(404)
+
+    filename = cached.get("image_filename")
+    if not filename:
+        abort(404)
+    return send_from_directory(IMAGE_DIR.resolve(), filename)
 
 
 @bp.route("/recommendations", methods=["GET"])
