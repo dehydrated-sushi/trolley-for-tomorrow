@@ -5,6 +5,35 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.6.1] — 2026-04-23
+
+### Changed — Meals page sort set rationalised; tag icons + egg icon fixed; legend expanded
+
+**Module:** `frontend/src/modules/meals`, `frontend/src/shared`
+
+- **Sort options reduced from 5 to 4** to remove redundancy with the `Cook without shopping` filter and the default match ordering:
+  - Removed `Quickest` (ranking by minutes) and `Fewest missing ingredients` (ranking by `total - match_count`, which duplicated the default `Best match` ordering and was essentially a fuzzier version of the `Cook without shopping` filter).
+  - Added `Highest calories` as the inverse pair to `Lowest calories`.
+  - Final set: `Best match` (default), `Highest protein`, `Lowest calories`, `Highest calories`.
+- **`TAG_STYLES` extracted to `frontend/src/shared/recipeTags.js`** so the filter chips on the Meals page and the new "Recipe tags" section in the legend share one source of truth. Also exported `TAG_STYLE_FALLBACK` to replace the inline literals.
+- **Two tag icons corrected:**
+  - `low_carb`: `grain` (amber cluster of dots — it literally depicts the thing being reduced) → **`grass`** (lime green `#65a30d` / bg `#ecfccb`). Signals plant/veggie focus instead of carbs.
+  - `simple`: `looks_one` (a "1" in a square — arbitrary, since the rule is ≤ 5 ingredients, not 1) → **`format_list_bulleted`**. Reads as "short list".
+- **Recipe-card meta strip** — the `egg` icon next to "2/4 in fridge" read as "egg", not "fridge items". Replaced with `kitchen` (refrigerator glyph) to match the label.
+
+### Added — Recipe tags in the Legend popover
+
+**Module:** `frontend/src/shared`
+
+- `NutritionLegend` now accepts an optional `recipeTagDefs` prop. When provided (Meals page passes `tagDefs` from `/api/meals/tags`), a second "Recipe tags" section renders below the ingredient-level categories, with each tag's icon, label, and rule description. The `drink` tag is hidden in this section to stay consistent with the filter row (`Hide drinks` covers the negative case).
+- Legend popover retitled from "Nutritional categories" → "Legend"; the previous heading becomes an uppercase section header. Added `max-h-[70vh] overflow-y-auto` so the taller popover doesn't clip on short viewports.
+
+### Notes
+
+- Backend sort keys and frontend sort options must stay in lockstep. The `meal_plan` backend now advertises exactly four: `match`, `highest_protein`, `lowest_calories`, `highest_calories`. URLs with the retired `quickest` or `fewest_missing` silently fall back to `match`.
+
+---
+
 ## [1.6.0] — 2026-04-23
 
 ### Fixed — Blank Meals page on load

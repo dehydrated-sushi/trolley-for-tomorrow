@@ -5,6 +5,27 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.2.0] — 2026-04-23
+
+### Added
+
+- **`highest_calories` sort key** on `GET /api/meals/recommendations?sort=`. Inverse pair to the existing `lowest_calories`. Sorts by `-calories` with the usual `-match_score`, `name` tiebreakers; recipes with NULL `calories` land at the end.
+
+### Removed
+
+- **`quickest` and `fewest_missing` sort keys** dropped from `SORT_KEYS`. Product call:
+  - `fewest_missing` duplicated the default `match` ordering (which already ranks by `match_count / total_ingredients`) *and* partially shadowed the `strict_only=true` filter — three mechanisms pointing at one fridge-completion dimension.
+  - `quickest` dropped by product call to keep the dropdown tight (minutes-based ranking was rarely picked in user testing).
+
+  Requests with the retired keys fall back to `match` via the existing `if sort_key not in SORT_KEYS` guard, so any stale frontend, bookmark, or cached client keeps working — it just sees the default ordering.
+
+### Notes
+
+- Final sort set is now: `match` (default), `highest_protein`, `lowest_calories`, `highest_calories`.
+- Frontend `SORT_OPTIONS` in `frontend/src/modules/meals/MealsPage.jsx` must stay in sync with this set.
+
+---
+
 ## [1.1.0] — 2026-04-23
 
 ### Added

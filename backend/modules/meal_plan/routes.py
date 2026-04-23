@@ -26,7 +26,7 @@ MIN_MATCH_RATIO = 0.4
 
 # Valid sort keys accepted by the `sort` query param.
 SORT_KEYS = frozenset({
-    "match", "quickest", "fewest_missing", "highest_protein", "lowest_calories",
+    "match", "highest_protein", "lowest_calories", "highest_calories",
 })
 
 
@@ -379,17 +379,7 @@ def get_meal_recommendations():
         # ---- Sorting ----
         # All sort keys use a numeric falsy-safe fallback so recipes with
         # None for the column sort to the end (descending) or start (ascending).
-        if sort_key == "quickest":
-            all_recipes.sort(
-                key=lambda x: (x["minutes"] if x["minutes"] is not None else 10**9,
-                               -x["match_score"], x["name"])
-            )
-        elif sort_key == "fewest_missing":
-            all_recipes.sort(
-                key=lambda x: (x["total_ingredients"] - x["match_count"],
-                               -x["match_score"], x["name"])
-            )
-        elif sort_key == "highest_protein":
+        if sort_key == "highest_protein":
             all_recipes.sort(
                 key=lambda x: (-(x["protein"] if x["protein"] is not None else -1),
                                -x["match_score"], x["name"])
@@ -397,6 +387,11 @@ def get_meal_recommendations():
         elif sort_key == "lowest_calories":
             all_recipes.sort(
                 key=lambda x: (x["calories"] if x["calories"] is not None else 10**9,
+                               -x["match_score"], x["name"])
+            )
+        elif sort_key == "highest_calories":
+            all_recipes.sort(
+                key=lambda x: (-(x["calories"] if x["calories"] is not None else -1),
                                -x["match_score"], x["name"])
             )
         else:  # default: "match"

@@ -4,15 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../../lib/api'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
+import { TAG_STYLES, TAG_STYLE_FALLBACK } from '../../shared/recipeTags'
 import NutritionPopover from './NutritionPopover'
 import SortDropdown from './SortDropdown'
 
 const SORT_OPTIONS = [
-  { key: 'match',           label: 'Best match' },
-  { key: 'quickest',        label: 'Quickest' },
-  { key: 'fewest_missing',  label: 'Fewest missing ingredients' },
-  { key: 'highest_protein', label: 'Highest protein' },
-  { key: 'lowest_calories', label: 'Lowest calories' },
+  { key: 'match',            label: 'Best match' },
+  { key: 'highest_protein',  label: 'Highest protein' },
+  { key: 'lowest_calories',  label: 'Lowest calories' },
+  { key: 'highest_calories', label: 'Highest calories' },
 ]
 
 /** Dominant category across the full ingredient list (for hero tint). */
@@ -28,18 +28,6 @@ function dominantCategory(recipe) {
     if (n > bestN) { best = c; bestN = n }
   }
   return best || 'other'
-}
-
-/** Pill colour for each tag — distinct from the nutritional colours. */
-const TAG_STYLES = {
-  drink:        { bg: '#e0e7ff', fg: '#6366f1', icon: 'local_bar' },         // indigo
-  high_protein: { bg: '#ccfbf1', fg: '#14b8a6', icon: 'fitness_center' },    // teal
-  low_carb:     { bg: '#fef3c7', fg: '#b45309', icon: 'grain' },             // amber (strike-through visually implied)
-  light:        { bg: '#ecfdf5', fg: '#059669', icon: 'air' },               // light green
-  hearty:       { bg: '#fee2e2', fg: '#b91c1c', icon: 'restaurant' },        // red
-  quick:        { bg: '#dbeafe', fg: '#2563eb', icon: 'bolt' },              // blue
-  sweet:        { bg: '#fce7f3', fg: '#ec4899', icon: 'cake' },              // pink
-  simple:       { bg: '#f3f4f6', fg: '#374151', icon: 'looks_one' },         // neutral
 }
 
 /**
@@ -89,7 +77,7 @@ function FilterChip({ active, onClick, icon, label, activeBg, activeFg, inactive
 }
 
 function TagPill({ tag, tagInfo, size = 'sm' }) {
-  const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
+  const style = TAG_STYLES[tag] || TAG_STYLE_FALLBACK
   const label = tagInfo?.label || tag
   const description = tagInfo?.description || ''
   const padding = size === 'xs' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
@@ -192,7 +180,7 @@ function RecipeCard({ meal, tagDefs }) {
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">egg</span>
+                <span className="material-symbols-outlined text-sm">kitchen</span>
                 {meal.match_count}/{meal.total_ingredients} in fridge
               </span>
               <span className="material-symbols-outlined text-[14px] opacity-50 ml-auto">info</span>
@@ -446,7 +434,7 @@ export default function MealsPage() {
             Recipes matched to what&apos;s already in your fridge, filtered by your dietary preferences.
           </p>
         </div>
-        <NutritionLegend />
+        <NutritionLegend recipeTagDefs={tagDefs} />
       </header>
 
       {error && (
@@ -509,7 +497,7 @@ export default function MealsPage() {
               .filter(([tag]) => tag !== 'drink')
               .map(([tag, info]) => {
                 const active = selectedTags.includes(tag)
-                const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
+                const style = TAG_STYLES[tag] || TAG_STYLE_FALLBACK
                 return (
                   <FilterChip
                     key={tag}

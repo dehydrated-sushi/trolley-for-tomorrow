@@ -5,6 +5,25 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.1.1] — 2026-04-23
+
+### Changed
+
+- **Sort set rationalised from 5 → 4 options.** Removed `Quickest` and `Fewest missing ingredients`; added `Highest calories` as the inverse pair to `Lowest calories`. `Fewest missing` was dropped because it duplicated the default `Best match` ordering *and* partially overlapped with the `Cook without shopping` filter — three knobs for one fridge-completion dimension. Minutes-based sorting was dropped by product call.
+- **`TAG_STYLES` and `TAG_STYLE_FALLBACK` moved to `frontend/src/shared/recipeTags.js`** so the filter chips and the legend popover's new "Recipe tags" section share one source of truth.
+- **Two tag icons changed** for semantic accuracy:
+  - `low_carb`: `grain` → `grass`; palette switched from amber to lime (`bg: #ecfccb`, `fg: #65a30d`). The grain icon depicted the thing being reduced — confusing.
+  - `simple`: `looks_one` (a "1") → `format_list_bulleted`. The rule is ≤ 5 ingredients, not 1.
+- **Recipe-card meta strip:** the `egg` icon next to the "N/M in fridge" line was ambiguous. Replaced with `kitchen` (refrigerator) to match the label literally.
+- **Legend button now shows recipe tags too.** `<NutritionLegend recipeTagDefs={tagDefs} />` passes the `/api/meals/tags` response through; the legend renders a second section under the ingredient categories.
+
+### Notes
+
+- Frontend `SORT_OPTIONS` must match backend `SORT_KEYS`. If someone hits the API with the retired `quickest` or `fewest_missing` keys, the backend silently falls back to `match`.
+- `NutritionLegend` is still used elsewhere without recipe tags (e.g. homepage). The `recipeTagDefs` prop is optional; passing nothing hides the new section, preserving existing call sites.
+
+---
+
 ## [1.1.0] — 2026-04-23
 
 Post-user-test polish pass: blank-page fix, filter-bar redesign, real nutrition popover backed by the actual `recipes` nutrition columns, and a custom sort dropdown replacing the native `<select>`.
