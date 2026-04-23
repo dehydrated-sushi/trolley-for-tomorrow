@@ -4,6 +4,7 @@ import SideNav from './SideNav'
 import Footer from './Footer'
 import MobileBottomNav from './MobileBottomNav'
 import DevResetButton from './DevResetButton'
+import Toast from './Toast'
 
 export default function AppShell() {
   return (
@@ -18,6 +19,7 @@ export default function AppShell() {
       </div>
       <MobileBottomNav />
       {import.meta.env.DEV && <DevResetButton />}
+      <Toast />
     </div>
   )
 }

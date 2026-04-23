@@ -1,12 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_BASE, apiFetch } from '../../lib/api'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
 import { TAG_STYLES, TAG_STYLE_FALLBACK } from '../../shared/recipeTags'
+import { toast } from '../../shared/toastBus'
+import {
+  addItem    as addToShopping,
+  removeItem as removeFromShopping,
+  findByName as findShoppingItem,
+  getItems   as getShoppingItems,
+  subscribe  as subscribeShopping,
+} from '../../shared/shoppingList'
 import NutritionPopover from './NutritionPopover'
 import SortDropdown from './SortDropdown'
+import FavouritesModal from './FavouritesModal'
 
 const SORT_OPTIONS = [
   { key: 'match',            label: 'Best match' },
@@ -117,11 +126,30 @@ function RecipeHeroImage({ recipeId }) {
   )
 }
 
-function RecipeCard({ meal, tagDefs }) {
+function RecipeCard({
+  meal,
+  tagDefs,
+  isFavourited,
+  onToggleFavourite,
+  shoppingSet,
+  highlighted,
+  cardRef,
+}) {
   const [expanded, setExpanded] = useState(false)
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false)
   const heroCat = dominantCategory(meal)
   const heroInfo = getCategoryInfo(heroCat)
+
+  // When the parent flags this card as highlighted (arriving via
+  // ?highlight=<id> from the Shopping page or the Favourites modal),
+  // auto-open the detail view. The user followed an arrow from another
+  // page — landing on a collapsed card would make them click again.
+  useEffect(() => {
+    if (highlighted) {
+      setExpanded(true)
+      setIngredientsExpanded(true)
+    }
+  }, [highlighted])
 
   const matchedSet = new Set(
     (meal.matched_ingredients || []).map((m) =>
@@ -140,9 +168,73 @@ function RecipeCard({ meal, tagDefs }) {
   const showAllSteps = expanded || steps.length <= STEPS_PREVIEW
   const visibleSteps = showAllSteps ? steps : steps.slice(0, STEPS_PREVIEW)
 
+  // --- Add-to-shopping handlers (per-ingredient + bulk) -------------------
+
+  const isInShopping = (name) =>
+    (shoppingSet || new Set()).has(name.toLowerCase().trim())
+
+  const handleAddIngredient = (name) => {
+    const result = addToShopping(name, { source: 'recipe' })
+    if (result.added) {
+      toast.show({
+        message: `Added ${name} to your shopping list`,
+        action: {
+          label: 'Undo',
+          onClick: () => removeFromShopping(result.item.id),
+        },
+      })
+    } else {
+      // Already in list — flash the existing item via the toast bus.
+      // ShoppingListPage (if mounted) picks up a custom `shopping:flash`
+      // event to highlight the matching row; otherwise the toast alone
+      // communicates the duplicate.
+      const existing = result.existing || findShoppingItem(name)
+      if (existing) {
+        window.dispatchEvent(new CustomEvent('shopping:flash', { detail: { id: existing.id } }))
+      }
+      toast.show({ message: `${name} is already in your list`, tone: 'muted' })
+    }
+  }
+
+  const handleAddAllMissing = () => {
+    const added = []
+    const skipped = []
+    for (const ing of missingIngredients) {
+      const result = addToShopping(ing.name, { source: 'recipe' })
+      if (result.added) added.push(result.item)
+      else skipped.push(ing.name)
+    }
+    if (added.length === 0) {
+      toast.show({
+        message: `All ${missingIngredients.length} items are already in your list`,
+        tone: 'muted',
+      })
+      return
+    }
+    const msg = skipped.length
+      ? `Added ${added.length} · ${skipped.length} already in list`
+      : `Added ${added.length} ${added.length === 1 ? 'item' : 'items'} to your shopping list`
+    toast.show({
+      message: msg,
+      action: {
+        label: 'Undo',
+        onClick: () => added.forEach((it) => removeFromShopping(it.id)),
+      },
+    })
+  }
+
   return (
     <motion.div
+      ref={cardRef}
       whileHover={{ y: -3, transition: { type: 'spring', stiffness: 380, damping: 26 } }}
+      animate={highlighted ? {
+        boxShadow: [
+          '0 0 0 0px rgba(16,185,129,0)',
+          '0 0 0 6px rgba(16,185,129,0.35)',
+          '0 0 0 0px rgba(16,185,129,0)',
+        ],
+      } : {}}
+      transition={highlighted ? { duration: 1.6, ease: 'easeInOut' } : {}}
       className="bg-surface-container-lowest rounded-[2rem] overflow-hidden editorial-shadow"
     >
       <div
@@ -194,7 +286,31 @@ function RecipeCard({ meal, tagDefs }) {
       </div>
 
       <div className="p-8">
-        <h3 className="text-2xl font-headline font-bold text-on-surface mb-2">{meal.name}</h3>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="text-2xl font-headline font-bold text-on-surface leading-tight">{meal.name}</h3>
+          {/* Favourite star — persisted server-side via /api/profile/favourites,
+              optimistic toggle via onToggleFavourite callback. */}
+          <motion.button
+            type="button"
+            onClick={() => onToggleFavourite?.(meal.id)}
+            aria-label={isFavourited ? 'Remove from favourites' : 'Add to favourites'}
+            aria-pressed={isFavourited}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+            className="flex-shrink-0 -mt-1 -mr-1 p-1.5 rounded-full hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <span
+              className="material-symbols-outlined text-2xl"
+              style={{
+                color: isFavourited ? '#f59e0b' : '#9ca3af',
+                fontVariationSettings: isFavourited ? "'FILL' 1" : "'FILL' 0",
+              }}
+            >
+              star
+            </span>
+          </motion.button>
+        </div>
         <div className="mb-4">
           <NutritionPopover recipe={meal}>
             <div className="flex items-center gap-3 text-on-surface-variant text-sm flex-wrap rounded-xl px-2 py-1.5 -mx-2 hover:bg-surface-container/60 transition-colors">
@@ -226,7 +342,10 @@ function RecipeCard({ meal, tagDefs }) {
           </div>
         )}
 
-        {/* Missing-ingredients summary — the only useful delta when you already have a virtual fridge */}
+        {/* Missing-ingredients summary — each missing item is a clickable
+            chip that adds it to the shopping list. "Add all missing" button
+            batch-adds everything at once. Items already in the shopping list
+            render as muted "✓ Added" chips instead of actionable "+". */}
         <div className="mb-6">
           {missingIngredients.length === 0 ? (
             <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 text-sm font-semibold">
@@ -234,14 +353,50 @@ function RecipeCard({ meal, tagDefs }) {
               You have everything to make this
             </div>
           ) : (
-            <div className="flex items-start gap-2 text-sm">
-              <span className="material-symbols-outlined text-tertiary text-base mt-0.5">shopping_basket</span>
-              <p className="leading-relaxed">
-                <span className="font-bold text-on-surface">Still need:</span>{' '}
-                <span className="text-on-surface-variant">
-                  {missingIngredients.map((i) => i.name).join(', ')}
-                </span>
-              </p>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-tertiary text-base">shopping_basket</span>
+                <span className="font-bold text-on-surface">Still need:</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missingIngredients.map((ing) => {
+                  const added = isInShopping(ing.name)
+                  return (
+                    <motion.button
+                      key={ing.name}
+                      type="button"
+                      onClick={() => handleAddIngredient(ing.name)}
+                      disabled={added}
+                      whileHover={added ? {} : { scale: 1.03 }}
+                      whileTap={added ? {} : { scale: 0.97 }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+                      className={
+                        added
+                          ? 'inline-flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 cursor-default'
+                          : 'inline-flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-semibold bg-surface-container-high text-on-surface hover:bg-primary/10 hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                      }
+                      aria-label={added ? `${ing.name} is already in your list` : `Add ${ing.name} to shopping list`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {added ? 'check' : 'add'}
+                      </span>
+                      {ing.name}
+                    </motion.button>
+                  )
+                })}
+              </div>
+              {/* Add-all shortcut — skips anything already present */}
+              <motion.button
+                type="button"
+                onClick={handleAddAllMissing}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+                className="mt-1 inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                <span className="material-symbols-outlined text-sm">playlist_add</span>
+                Add all missing
+              </motion.button>
             </div>
           )}
 
@@ -363,12 +518,139 @@ export default function MealsPage() {
   // UI state
   const [fridgeExpanded, setFridgeExpanded] = useState(false)
 
-  // Fetch tag definitions once
+  // Favourites — server-persisted Set of recipe IDs this user has starred.
+  // Toggled optimistically; the PUT/DELETE call's failure flips it back.
+  const [favouriteIds, setFavouriteIds] = useState(() => new Set())
+  // Full favourited recipe records (with nutrition, steps, favourited_at)
+  // as served by /api/profile/favourites. The popup renders from this; we
+  // keep it separate from `favouriteIds` because the Set powers the cheap
+  // "is this starred?" check on RecipeCards, while the array powers the
+  // modal's filter/sort view.
+  const [favouriteRecipes, setFavouriteRecipes] = useState([])
+  const [favouritesOpen, setFavouritesOpen] = useState(false)
+
+  // Shopping-list snapshot — lowercased Set of names currently in the
+  // user's shopping list. Used by RecipeCard chips to render "added"
+  // state so a user doesn't double-add. Re-subscribes on mount; updates
+  // cross-component + cross-tab via the shared storage event.
+  const [shoppingSet, setShoppingSet] = useState(() => {
+    const items = getShoppingItems()
+    return new Set(items.map((i) => i.name.toLowerCase().trim()))
+  })
+
+  // Deep-link highlight — when the Shopping page's tooltip sends the user
+  // here via `/meals?highlight=<recipe_id>`, we scroll that card into view
+  // and run a brief shadow-pulse. `activeHighlight` is the id being pulsed
+  // RIGHT NOW; it clears ~1.8 s after the URL param was consumed, so the
+  // animation plays in full even though we strip ?highlight immediately
+  // (stripping prevents a page refresh from re-triggering the highlight).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const highlightId = searchParams.get('highlight')
+  const [activeHighlight, setActiveHighlight] = useState(null)
+  const cardRefs = useRef(new Map())
+
+  // Fetch tag definitions + favourites once
   useEffect(() => {
     apiFetch('/api/meals/tags')
       .then((d) => setTagDefs(d?.tags || {}))
       .catch(() => { /* ignore */ })
+
+    apiFetch('/api/profile/favourites')
+      .then((d) => {
+        setFavouriteIds(new Set(d?.favourite_recipe_ids || []))
+        setFavouriteRecipes(d?.favourites || [])
+      })
+      .catch(() => { /* ignore — favourites are optional */ })
   }, [])
+
+  // Keep shopping snapshot fresh (updates from this tab, other components,
+  // and other tabs via the storage event inside `subscribe`).
+  useEffect(() => {
+    const unsub = subscribeShopping((items) => {
+      setShoppingSet(new Set(items.map((i) => i.name.toLowerCase().trim())))
+    })
+    return unsub
+  }, [])
+
+  // Optimistic favourite toggle — flip local state immediately, call the
+  // backend, revert on error. Keeps `favouriteIds` (the cheap membership
+  // check) and `favouriteRecipes` (the full records the popup renders) in
+  // sync in a single atomic update.
+  const handleToggleFavourite = useCallback((recipeId) => {
+    let wasFavourited = false
+    setFavouriteIds((prev) => {
+      const next = new Set(prev)
+      wasFavourited = next.has(recipeId)
+      if (wasFavourited) next.delete(recipeId)
+      else next.add(recipeId)
+      return next
+    })
+
+    setFavouriteRecipes((prev) => {
+      if (wasFavourited) {
+        return prev.filter((r) => r.id !== recipeId)
+      }
+      // Add — pull the full record from current recommendations, tag it
+      // with a just-now favourited_at so "Recently starred" ordering is
+      // correct before the next /favourites refetch.
+      if (prev.some((r) => r.id === recipeId)) return prev
+      const found = recommendations.find((r) => r.id === recipeId)
+      if (!found) return prev
+      return [{ ...found, favourited_at: new Date().toISOString() }, ...prev]
+    })
+
+    const method = wasFavourited ? 'DELETE' : 'PUT'
+    apiFetch(`/api/profile/favourites/${recipeId}`, { method })
+      .catch(() => {
+        // Revert optimistic change on failure.
+        setFavouriteIds((s) => {
+          const r = new Set(s)
+          if (wasFavourited) r.add(recipeId)
+          else r.delete(recipeId)
+          return r
+        })
+        setFavouriteRecipes((prev) => {
+          if (wasFavourited) {
+            // We removed it optimistically; we need it back. Re-fetch is the
+            // safest way since we don't have the exact previous record.
+            apiFetch('/api/profile/favourites')
+              .then((d) => setFavouriteRecipes(d?.favourites || []))
+              .catch(() => {})
+            return prev
+          }
+          return prev.filter((r) => r.id !== recipeId)
+        })
+        toast.show({
+          message: 'Could not update favourites',
+          tone: 'error',
+        })
+      })
+  }, [recommendations])
+
+  // Scroll + highlight when `?highlight=<id>` is present AND the matching
+  // card is rendered. Clears URL param immediately so a refresh doesn't
+  // re-highlight; `activeHighlight` carries the pulse through completion.
+  useEffect(() => {
+    if (!highlightId) return
+    const id = parseInt(highlightId, 10)
+    if (Number.isNaN(id)) return
+    const rendered = recommendations.some((r) => r.id === id)
+    if (!rendered) return
+
+    const el = cardRefs.current.get(id)
+    if (!el) return
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setActiveHighlight(id)
+    const timer = setTimeout(() => setActiveHighlight(null), 1800)
+
+    const next = new URLSearchParams(searchParams)
+    next.delete('highlight')
+    setSearchParams(next, { replace: true })
+
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightId, recommendations])
 
   const loadRecommendations = useCallback(async () => {
     setLoading(true)
@@ -503,7 +785,35 @@ export default function MealsPage() {
             title={hideDrinks ? 'Drinks are hidden. Click to show them.' : 'Hide beverage-only recipes.'}
           />
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <AnimatePresence>
+              {favouriteIds.size > 0 && (
+                <motion.button
+                  key="fav-trigger"
+                  type="button"
+                  onClick={() => setFavouritesOpen(true)}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  whileHover={{ scale: 1.04, y: -1 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white text-on-surface text-sm font-semibold border border-amber-200 shadow-[0_2px_8px_-2px_rgba(251,191,36,0.25)] hover:border-amber-400 transition-colors"
+                  aria-label={`View your ${favouriteIds.size} favourite recipe${favouriteIds.size !== 1 ? 's' : ''}`}
+                >
+                  <span
+                    className="material-symbols-outlined text-[18px] text-amber-500"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    star
+                  </span>
+                  <span>{favouriteIds.size}</span>
+                  <span className="hidden md:inline text-on-surface-variant font-medium">
+                    favourite{favouriteIds.size !== 1 ? 's' : ''}
+                  </span>
+                </motion.button>
+              )}
+            </AnimatePresence>
             <SortDropdown
               value={sortKey}
               options={SORT_OPTIONS}
@@ -744,7 +1054,19 @@ export default function MealsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {recommendations.map((meal) => (
-                <RecipeCard key={meal.id} meal={meal} tagDefs={tagDefs} />
+                <RecipeCard
+                  key={meal.id}
+                  meal={meal}
+                  tagDefs={tagDefs}
+                  isFavourited={favouriteIds.has(meal.id)}
+                  onToggleFavourite={handleToggleFavourite}
+                  shoppingSet={shoppingSet}
+                  highlighted={activeHighlight === meal.id}
+                  cardRef={(el) => {
+                    if (el) cardRefs.current.set(meal.id, el)
+                    else cardRefs.current.delete(meal.id)
+                  }}
+                />
               ))}
             </div>
 
@@ -795,6 +1117,15 @@ export default function MealsPage() {
           </section>
         </>
       )}
+
+      <FavouritesModal
+        open={favouritesOpen}
+        onClose={() => setFavouritesOpen(false)}
+        favourites={favouriteRecipes}
+        favouriteIds={favouriteIds}
+        onToggleFavourite={handleToggleFavourite}
+        tagDefs={tagDefs}
+      />
     </div>
   )
 }

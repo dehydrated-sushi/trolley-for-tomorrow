@@ -5,6 +5,57 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.4.0] — 2026-04-24
+
+### Added — Favourites modal with sort, filter, and inline recipe detail
+
+- **Trigger pill** in the filter row — shows `★ N favourites` and only renders when `favouriteIds.size > 0`. Springy hover (`y: -1, scale: 1.04`), scale-in entrance, scale-out exit via `AnimatePresence`.
+- **New `FavouritesModal.jsx`** — scrim with `backdrop-blur-sm`, modal scales in from `0.96, y: 12`. Max-width 3xl, max-height 88 vh, flex-column layout so the filter bar stays fixed and the list scrolls.
+- **Filter grammar mirrors the Meals page**: tag chips (derived client-side from nutrition fields via `deriveTags()` — protein ≥ 25, carbs < 20, calories < 300 / ≥ 600, minutes ≤ 15, sugar > 25, n_ingredients ≤ 5, name-regex fallback for drink), Hide-drinks toggle, Clear-filters shortcut. Sort dropdown reuses the Meals-page `SortDropdown` with four options: Recently starred (default, by `favourited_at` desc), Highest protein, Lowest calories, Highest calories. Filter + sort runs client-side against the payload the parent already fetched — no extra network calls.
+- **Detail view inside the modal** — clicking any row crossfades the list for a full recipe view: hero image (`/api/meals/recipe-image/:id`, gradient fallback on 404), title + meta row (minutes, ingredient count, kcal), derived tag pills, 2-column ingredients grid with stagger-fade-in, numbered steps with per-step delay, and a 2/4-column nutrition grid. Back button or Escape returns to the list; scroll position in the list is preserved. A sticky footer "Open on Meals page" button jumps to `/meals?highlight=<id>` for users who want the recommendation context.
+- **Works even when the recipe isn't on the current Meals page** — the modal is fed entirely from `/api/profile/favourites`, independent of pagination or filter state on the Meals surface. Prior behaviour (nav to Meals + highlight) silently failed when the card wasn't in the currently-rendered page.
+- **Escape handling layered** — first press closes the detail view, second closes the modal. Body scroll locked while open.
+
+### Changed — Deep-link `?highlight=<id>` auto-expands the target card
+
+- `RecipeCard` now watches its `highlighted` prop and flips both `expanded` and `ingredientsExpanded` to true on transition. Landing on a collapsed card after following a popover / favourites-modal "Open on Meals page" link would have required a second click; users now land with ingredients + steps fully open.
+- The existing scroll + emerald shadow-pulse animation is unchanged.
+
+### Added — `favouriteRecipes: array` alongside `favouriteIds: Set<number>`
+
+- `MealsPage` now keeps the full favourited-recipe records in state (sourced from the `favourites` field of `/api/profile/favourites`). Passed to `FavouritesModal` so it can render full detail without a second fetch.
+- `handleToggleFavourite` updates both states atomically. On add, the current record is lifted from `recommendations` into the array with a freshly-set `favourited_at` so "Recently starred" ordering is correct before the next refetch lands.
+
+### Notes
+
+- Tag computation in `FavouritesModal::deriveTags` intentionally duplicates `meal_plan.routes._compute_tags` thresholds. If backend thresholds shift, mirror them here. The 'drink' tag is a name-regex fallback (`smoothie|juice|tea|coffee|cocktail|…`) because the favourites endpoint doesn't run ingredients through the classifier.
+- `detailRecipe` is ephemeral state inside the modal — closing the modal resets it. URL-routing a `?recipe=<id>` param was considered and rejected to keep the modal as a pure local UI state.
+- `favouriteRecipes` is the source of truth for the modal, but `favouriteIds` remains the cheap membership-check for the `RecipeCard` star. Keep both in sync on every mutation.
+
+---
+
+## [1.3.0] — 2026-04-23
+
+### Added — Favourite star + add-to-shopping-list on recipe cards
+
+- **Favourite star button** in the title row of each `RecipeCard`, right-aligned opposite the recipe name. Empty grey outline when not favourited, filled amber when favourited. Optimistic toggle via `PUT` / `DELETE /api/profile/favourites/<id>` with a state revert + error toast on failure. `aria-pressed` reflects the current state; `aria-label` flips between "Add to favourites" / "Remove from favourites".
+- **"Still need" line rebuilt as clickable chips.** Each missing ingredient renders as a chip with a `+` icon; clicking adds the ingredient to the user's localStorage shopping list with a toast + Undo action. Chips for ingredients already in the shopping list render as muted emerald "✓ {name}" pills and are non-interactive.
+- **"Add all missing"** button below the chips — batch-adds every missing ingredient on the card at once, skipping anything already in the list. Toast summarises the result (`Added 3 items` or `Added 2 · 1 already in list`), with Undo that removes the freshly-added subset only (not the pre-existing matches).
+- **Deep-link highlight via `?highlight=<recipe_id>`** — when the Shopping page's rail-popover links land on `/meals?highlight=<id>`, the Meals page scrolls that card into view and runs a 1.6 s emerald shadow-pulse. Consumed and cleared from the URL immediately (`setSearchParams({ replace: true })`) so a page refresh doesn't re-trigger the highlight; a local `activeHighlight` state carries the animation through to completion.
+
+### Added — MealsPage-level state
+
+- `favouriteIds: Set<number>` fetched once from `/api/profile/favourites` on mount. Passed per-card as `isFavourited={favouriteIds.has(meal.id)}`.
+- `shoppingSet: Set<string>` — lowercased-trimmed snapshot of the current shopping list. Subscribes to `shared/shoppingList.js` changes so adds from other components or tabs keep the chip UI in sync. Passed per-card; `RecipeCard` checks `shoppingSet.has(name)` to decide chip state.
+- `cardRefs: Map<number, HTMLElement>` — callback-ref map, used by the highlight scroller.
+
+### Notes
+
+- Duplicate-add fires a `shopping:flash` CustomEvent carrying the existing item's id. The Shopping page listens for this and pulses the matching row yellow for 850 ms, so an attempted double-add from Meals gives visual grounding on the other side. No-op when Shopping page isn't mounted.
+- The favourite toggle endpoint is called as `apiFetch(url, { method: 'PUT' | 'DELETE' })` — the existing `apiFetch` passes options straight to `fetch()` so no wrapper changes were needed.
+
+---
+
 ## [1.2.0] — 2026-04-23
 
 ### Added — Pixabay recipe hero photos

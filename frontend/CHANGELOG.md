@@ -5,6 +5,92 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.11.0] — 2026-04-24
+
+### Added — Receipt reconciliation · Favourites modal · Shopping page polish
+
+Cross-cutting follow-up to 1.10.0. Closes the loop between the shopping list and the receipt upload, gives starred recipes a proper home, and tightens the Shopping page's visual hierarchy + motion language.
+
+**Modules:** `frontend/src/shared`, `frontend/src/modules/receipt`, `frontend/src/modules/meals`, `frontend/src/modules/shopping`
+
+#### Receipt reconciliation (`modules/receipt`)
+
+- **Post-commit panel** on the Upload-receipt page. After the user confirms items into their fridge, the page computes token-overlap matches between the confirmed names and the user's unchecked shopping list items. Any hits render as a checklist (pre-ticked) with a "Cross off N" button that bulk-checks the matched shopping-list items. Panel collapses to a small "Shopping list updated · View list" confirmation row after action.
+- Matches are frontend-only (no backend round-trip) — the fuzzy matcher lives in `shared/shoppingList.js::findUncheckedMatches`. Token normalisation, stopword stripping, trailing-s stemming. Any single meaningful token in common counts as a match; the user confirms before anything changes, so a slightly loose matcher is the right tradeoff.
+
+#### Favourites modal (`modules/meals`)
+
+- **Trigger pill** appears in the Meals filter row only when `favouriteIds.size > 0` — shows "★ N favourites" with a live count. Springy hover, entry animation.
+- **Scrollable modal** (scrim + backdrop-blur, scale-in modal) lists every starred recipe with the same sort/filter grammar as the Meals page. Sort options: Recently starred, Highest protein, Lowest calories, Highest calories. Filters: tag chips (computed client-side from nutrition fields to mirror `meal_plan.routes._compute_tags`), Hide-drinks toggle.
+- **Detail view inside the modal**: clicking any row crossfades the list for a full recipe view — hero image, tag pills, meta row, ingredients (2-col stagger-fade-in grid), numbered steps, nutrition grid. Back button (or Escape) returns to the list. A secondary "Open on Meals page" action in the footer jumps to the Meals page for users who want the recommendation-context view.
+- Modal works even when the recipe is not on the currently-rendered Meals page (pagination / filters can hide it) — data is fed from the favourites payload, not from `/api/meals/recommendations`.
+
+#### Meals page (`modules/meals`)
+
+- `?highlight=<id>` deep-link now also **auto-expands the card's detail panel** on arrival. Landing on a collapsed card after following a link would have required a second click; users now land with ingredients + steps open.
+- `favouriteRecipes` (full array) kept in state alongside the existing `favouriteIds: Set<number>`. Toggle handler updates both atomically; on add, the current recipe record is lifted from `recommendations` into the array with a just-now `favourited_at` so "Recently starred" ordering is correct before the next refetch.
+
+#### Shopping page (`modules/shopping`) — hierarchy + motion pass
+
+- Each recommendation rail now renders as a **self-contained card** (white surface, rounded, 1 px border, subtle shadow) with a coloured icon badge (emerald / indigo / amber), a proper display header, and a lighter subhead. All-caps kickers dropped.
+- New **"Your list" divider** with em-dashes and a small caption visually separates the recommendations zone from the manual list.
+- **Rail stagger on page entrance** — 90 ms between rails (`staggerChildren` variants on the grid wrapper; each Rail consumes the variant).
+- **Strikethrough wipe** on check — replaces CSS `line-through` with an animated 1.5 px bar that scales from left (`transform-origin: left`, 280 ms).
+- **Amber flash with shake** on duplicate-add — replaced the previous yellow pulse with a softer amber (`rgba(251,191,36,*)`) plus a 600 ms horizontal shake (`x: [0, -4, 4, -3, 3, 0]`). Triggered by the same `shopping:flash` CustomEvent from either the rail chip or a Meals-page `+` attempt.
+- **Chip-to-list morph** — clicking `+` on any rail chip captures the chip's bounding rect, renders a portal-style `MorphGhost` pill at that position, and flies it to the "Your list" heading over 600 ms with a scale dip + fade-out. Teaches the user's eye that "add" means "the thing went over there" instead of relying on them to notice the list has grown by one.
+
+#### Shared primitives changed
+
+- **`shared/toast.js` → `shared/toastBus.js`** — rename forced by a case-insensitive filesystem collision with `Toast.jsx`. Vite was resolving `from './Toast'` to the event bus (no default export) instead of the component, blanking the whole app. Three import sites updated (`Toast.jsx`, `MealsPage.jsx`, `ShoppingListPage.jsx`).
+- **`shared/shoppingList.js`** now also exposes `markChecked(ids)` (bulk-check, idempotent, single subscriber notification) and `findUncheckedMatches(receiptItems)` (the fuzzy matcher described above).
+
+### Notes for maintainers
+
+- Never name a `.js` and `.jsx` in the same directory whose names differ only by case. Case-insensitive filesystems (default macOS APFS, Windows NTFS) will collapse the import lookup and Vite's extension-resolution order will bite.
+- `findUncheckedMatches` is deliberately loose (any one token in common wins). The confirm-before-mutate pattern in the receipt page absorbs the false-positive cost. Don't tighten the matcher without also changing the UX contract.
+- The favourites modal's tag computation intentionally duplicates `meal_plan.routes._compute_tags` thresholds. If those thresholds shift on the backend, mirror the change in `FavouritesModal.jsx::deriveTags`. The 'drink' tag is a name-regex fallback because the favourites endpoint doesn't include ingredient classifier output.
+- `MorphGhost` runs on a fixed-position layer; it reads `toRect` once on mount, so mid-flight scrolls will miss the target. Acceptable at current scroll velocity; revisit if ever noticeable.
+- `detailRecipe` state in the favourites modal is intentionally ephemeral — closing the modal resets it, so reopening always lands on the list. Routing a `?recipe=<id>` param into the modal was considered and rejected (URL state vs. transient UI).
+
+---
+
+## [1.10.0] — 2026-04-23
+
+### Added — Favourites + Add-to-shopping + Shopping List rebuild
+
+Cross-cutting feature pass that makes the shopping list the page where a user actually plans what to buy, wired to a new favourites system and a + button on every missing ingredient in the Meals view.
+
+**Modules:** `frontend/src/shared`, `frontend/src/modules/meals`, `frontend/src/modules/shopping`
+
+#### New shared primitives
+
+- **Toast** (`shared/Toast.jsx` + `shared/toastBus.js` event bus) — single-slot, fixed bottom-right, 3 s auto-dismiss, replaces-latest, optional Undo action. Mounted once in `AppShell.jsx`. `aria-live="polite"` so screen readers announce politely. Three tones: default (emerald), muted, error.
+- **shoppingList** (`shared/shoppingList.js`) — localStorage-backed list CRUD with cross-tab `storage` event subscription. Items categorised instantly by a small local keyword map (covers ~80 % of common grocery inputs); misses fall through to "Other" and are refined asynchronously by `/api/ingredients/classify` when the response lands. Versioned storage key (`trolley_shopping_list_v1`) for future schema changes.
+
+#### Meals page (`modules/meals`)
+
+- **Favourite star** in the title row of each `RecipeCard`, server-persisted via the new `/api/profile/favourites` endpoints. Optimistic toggle with revert-on-error.
+- **Clickable chips** replace the "Still need: X, Y, Z" text — each missing ingredient is a `+` chip, items already in the shopping list render as muted ✓ pills.
+- **"Add all missing"** button batch-adds everything on the card, with Undo on the toast.
+- **`?highlight=<id>` deep link** — when the Shopping page's rail-popover links land here, the target card scrolls into view and runs a 1.6 s emerald shadow-pulse. URL param is consumed immediately; `activeHighlight` state carries the animation through.
+
+#### Shopping page (`modules/shopping`) — full rebuild (v1 → v2)
+
+- Top zone: three rails powered by `/api/shopping/recommendations` — "You buy this often" (staples), "Complete a recipe" (top matches' missing ingredients), "From your favourites" (missing ingredients from starred recipes). Hover/focus on rail-2/3 chips reveals a popover with clickable recipe links that route back to Meals via `?highlight=`.
+- Bottom zone: manual shopping list grouped by nutritional category. Text-to-add with Enter submission. Checked items strikethrough and drop to the bottom of their group. Clear-checked + Clear-all (with confirm) controls.
+- Source badge (`recipe`, `staple`, `favourite`) on non-manual items so provenance stays visible.
+- Duplicate-add → 850 ms yellow flash on the existing row via `shopping:flash` CustomEvent + muted toast. Works across both rails and Meals-page adds.
+
+### Notes for maintainers
+
+- The old `/api/shopping/list` endpoint is preserved server-side; this page no longer calls it.
+- `CATEGORY_ORDER` in `ShoppingListPage.jsx` controls vertical grouping. Mirror any changes in the Meals legend.
+- The local keyword map in `shared/shoppingList.js::_KEYWORD_MAP` is intentionally short — extending it is cheap and improves classify-hit rate, but anything not matched still gets backend refinement, so don't fear the cold path.
+- Toast slot is single-instance by design. A fresh `toast.show()` replaces whatever's on screen — queueing is almost always worse UX than showing the latest action.
+- Favourites are server-persisted (single-user, `user_id = 1`); shopping list is localStorage (per-device). Inconsistent by intent: favourites follow the user, the shopping list follows the moment.
+
+---
+
 ## [1.9.0] — 2026-04-23
 
 ### Changed — Trolley Tips is now an auto-rotating, hover-pausable carousel

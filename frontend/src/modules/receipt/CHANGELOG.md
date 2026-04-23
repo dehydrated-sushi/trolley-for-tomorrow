@@ -5,6 +5,26 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.1.0] — 2026-04-24
+
+### Added — Post-commit shopping-list reconciliation panel
+
+- **New panel** renders in `phase === 'done'` between the "Added to your fridge" header and the navigation buttons. Visible only when the items the user just committed intersect at least one **unchecked** item on their shopping list (via `shared/shoppingList.js::findUncheckedMatches`). No matches → no panel, clean.
+- **Default state**: every match's checkbox is pre-ticked, so the common case ("I bought everything I planned") is one click ("Cross off N") away. Individual checkboxes for the edge cases (forgot, substituted, changed mind).
+- **Animated checkbox row** — the tick scales in from `scale: 0, rotate: -45` when selected; each row fades + slides up in sequence via variant stagger (50 ms between rows).
+- **Bulk-check via `markChecked(ids)`** from `shared/shoppingList.js` — one write, one subscriber notification. Shopping page picks it up via its existing `subscribe` hook.
+- **Post-confirm collapse**: after "Cross off" fires, the full panel collapses to a small secondary-container pill: "Shopping list updated · View list" with a link to `/shopping`. Gives the user clear feedback without leaving the receipt success screen.
+- **"Not now"** button dismisses the panel without mutating the list — information-preserving fallback when the user doesn't want to reconcile right now.
+- **Match-source caption** under each row: `matched to "bell pepper red" on your receipt` — so the user can audit the matcher's guess before confirming. Important because the matcher is deliberately loose (any one meaningful token in common counts).
+
+### Notes for maintainers
+
+- Matching uses the OCR-confirmed names from `validRows`, not raw OCR output — the review step is the source of truth.
+- The matcher itself lives in `shared/shoppingList.js`. Tightening or loosening thresholds is a shared concern across surfaces that consume it — do not fork the logic locally.
+- Reconciliation state (`matches`, `selectedIds`, `reconciled`) is cleared by `resetFlow()` so "Upload another" produces a clean slate.
+
+---
+
 ## [1.0.0] — 2026-04-23
 
 First tracked release of the receipt module at module level. Prior scaffolding
