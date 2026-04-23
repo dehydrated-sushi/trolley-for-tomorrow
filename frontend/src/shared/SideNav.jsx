@@ -7,6 +7,7 @@ const SIDE_LINKS = [
   { label: 'Meal Plans',    icon: 'restaurant_menu', to: '/meals' },
   { label: 'Shopping List', icon: 'shopping_basket', to: '/shopping' },
   { label: 'Profile',       icon: 'account_circle',  to: '/profile' },
+  { label: "What's next",    icon: 'upcoming',        to: '/roadmap' },
 ]
 
 export default function SideNav() {

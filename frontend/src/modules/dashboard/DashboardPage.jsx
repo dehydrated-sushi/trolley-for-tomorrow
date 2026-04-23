@@ -494,6 +494,15 @@ export default function DashboardPage() {
                   title: 'Get Meal Recommendations',
                   desc: 'AI-powered recipes based on your fridge contents',
                 },
+                {
+                  to: '/roadmap',
+                  icon: 'upcoming',
+                  iconBg: 'bg-emerald-100/60',
+                  iconColor: 'text-emerald-700',
+                  title: "See what's coming next",
+                  desc: '7 features in development for iteration 2',
+                  teaser: true,
+                },
               ].map((row, i) => (
                 <motion.div
                   key={row.to}
@@ -508,8 +517,19 @@ export default function DashboardPage() {
                     <div className={`w-12 h-12 rounded-2xl ${row.iconBg} flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110`}>
                       <span className={`material-symbols-outlined ${row.iconColor}`}>{row.icon}</span>
                     </div>
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-on-surface">{row.title}</h4>
+                    <div className="flex-grow min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-on-surface">{row.title}</h4>
+                        {row.teaser && (
+                          <motion.span
+                            animate={{ opacity: [0.6, 1, 0.6] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            className="text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700"
+                          >
+                            New
+                          </motion.span>
+                        )}
+                      </div>
                       <p className="text-sm text-on-surface-variant">{row.desc}</p>
                     </div>
                     <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">

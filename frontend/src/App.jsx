@@ -9,6 +9,7 @@ import MealsPage from './modules/meals/MealsPage'
 import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
 import ProfilePage from './modules/dashboard/myProfile'
+import RoadmapPage from './modules/roadmap/RoadmapPage'
 import NotFoundPage from './modules/system/NotFoundPage'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/shopping" element={<ShoppingListPage />} />
           <Route path="/upload-receipt" element={<UploadReceiptPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/roadmap" element={<RoadmapPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

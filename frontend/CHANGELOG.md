@@ -5,6 +5,64 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.13.0] — 2026-04-24
+
+### Added — Forward-looking `/roadmap` page
+
+A dedicated route that tells users (and mentors) what's shipping next. Forward-looking only; no recap of iteration 1.
+
+**Modules:** `frontend/src/modules/roadmap` (new), `frontend/src/shared/SideNav.jsx`, `frontend/src/modules/dashboard/DashboardPage.jsx`, `frontend/src/App.jsx`
+
+#### Page composition
+
+- **Hero** — masked-reveal headline + subhead, per-word fade-in with a 30 ms stagger (not a typewriter; that pattern is already used on `HeroDemo`). Emerald "PRODUCT ROADMAP" eyebrow pill above the title with a pulsing dot.
+- **Iteration 2 · In development** — seven feature cards in a 2-column grid. Each card has a pulsing emerald status dot + "In dev" tag.
+- **Iteration 3 · Planned** — six feature cards with dashed border, slightly reduced opacity, muted slate dot + "Planned" tag.
+- **Static dashed divider** between sections with a small caption ("Further out"). No animated-timeline-line drawing because it jitters on low-end hardware and `useInView`-driven reveals already pace the content.
+- **Feedback CTA** — full-width emerald-gradient card at the bottom with a `mailto:` placeholder linking to the team (swap for the Google Form URL when finalised).
+
+#### Micro-demos (6 of 13 cards)
+
+- **Expiry tracking** — 7×4 mini calendar, one date pulsing red with a "Milk · 2d" chip above. Copy mentions the optional recipe-prioritisation toggle that surfaces expiring items in meal recommendations.
+- **Prices on the shopping list** — three ingredient rows with `$` amounts staggering in, plus an "Estimated total" tweened via `AnimatedNumber`.
+- **Estimated meal cost** — three recipe rows with `$` amounts ticking up via `AnimatedNumber`.
+- **Real user profiles** — emerald-gradient avatar + name + "✓ Synced" chip + four preference pills (Vegetarian / Family of 4 / $150 per week / No nuts) staggering in.
+- **Nutritional information** — four coloured bars filling to protein / carbs / fats / fiber percentages with live counters.
+- **Fridge YOLO scanning** — scaled reimplementation of the AR scan (dark backdrop, SVG silhouettes, cyan bounding box + corner brackets, tiny "🍏 Granny Smith · 88%" detection card, looping scan line).
+
+The remaining 7 cards are elegant static cards (icon + title + description + status chip): Better receipt OCR in iteration 2; Food map, Best prices from your history, Community support, Your food insights, Welfare food sources, Smart waste tracker in iteration 3. Rejected "animation on every card" — 13 bespoke demos is 8–10+ hours of work where most don't teach the user anything the description doesn't already say. Ship where the motion teaches; static where it doesn't.
+
+#### Iteration 3 roster (6 cards)
+
+1. **Food map** — community fridges, affordable grocers, farmers markets
+2. **Best prices from your history** — route shopping runs to cheapest store per-basket using receipt history
+3. **Community support** — user-shared discount tips and store finds; entries auto-populate the food map
+4. **Your food insights** — interactive charts for weekly spend, waste, other facts from history
+5. **Welfare food sources** — directory of food-bank programs, community meals, emergency relief
+6. **Smart waste tracker** — YOLO rot detection + user-confirmed "cooked with X" + "past expiry but still in fridge" diffs
+
+#### Entry points (2, not 4)
+
+- **Sidebar nav link** — "What's next" with `upcoming` icon, last in the list.
+- **Dashboard Quick Actions row** — appended as the 4th row with a pulsing green "NEW" badge. Discoverable without dominating the hero action list.
+- **Rejected** the AI's suggested Footer link (noise) and Made-By-modal CTA (wrong context — users open that for team credits).
+
+#### Copy conventions established
+
+- **No em dashes in user-facing copy.** They survive only in code comments. Replaced with periods, colons, or restructured phrasing across the hero, every card description, and both section descriptions. Per explicit user request: em dashes read as AI-generated filler to many readers.
+- **No week labels on cards.** Originally shipped with "Week 8 / Week 9 …" subtitles; dropped because a public roadmap shouldn't commit to sprint-level dates it can't guarantee. The pulsing-dot status chip conveys relative priority without the overpromise.
+
+### Notes for maintainers
+
+- Roadmap content lives in two arrays at the bottom of `RoadmapPage.jsx`. Editing a card is a one-entry change.
+- The YOLO card **deliberately doesn't import** `ARScanModal` — it reimplements a smaller version inline. Reusing the full modal would drag in body-scroll-lock, Escape handling, and the full photo backdrop for what should be a ~200 px card preview.
+- `FEEDBACK_URL` is a `mailto:` stub at the top of `RoadmapPage.jsx`. Swap to the Google Form URL when the team finalises it.
+- Every micro-demo is gated behind an `active` boolean that only flips to true once the card enters the viewport (via `useInView({ once: true })`). Fast-scrolling past a card doesn't waste cycles animating something the user won't see.
+- `prefers-reduced-motion` is handled at the hero level (masked-reveal becomes static) and at the demo level (users' systems suppress the animated transitions natively while content stays intact).
+- **Do not add em dashes to user-facing copy.** Project-wide convention established this session.
+
+---
+
 ## [1.12.0] — 2026-04-24
 
 ### Added — Manual fridge CRUD + AR scan preview modal
