@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS recipes (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS known_ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ingredient_name TEXT UNIQUE NOT NULL
+    ingredient_name TEXT UNIQUE NOT NULL,
+    category TEXT
 )
 """)
 
