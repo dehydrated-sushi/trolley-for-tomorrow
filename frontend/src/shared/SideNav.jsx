@@ -8,6 +8,7 @@ const SIDE_LINKS = [
   { label: 'Shopping List', icon: 'shopping_basket', to: '/shopping' },
   { label: 'Profile',       icon: 'account_circle',  to: '/profile' },
   { label: "What's next",    icon: 'upcoming',        to: '/roadmap' },
+  { label: 'Our process',    icon: 'hub',             to: '/process' },
 ]
 
 export default function SideNav() {

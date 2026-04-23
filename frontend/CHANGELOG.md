@@ -5,6 +5,62 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.16.0] — 2026-04-24
+
+### Added — `/process` page: complete research and design process, verbatim
+
+A full-content transparency page showing the research, decisions, and design process behind Trolley for Tomorrow. Intended for tutors and competing teams to see the work without ambiguity about what was researched vs. invented.
+
+**Modules:** `frontend/src/modules/process` (new), `frontend/src/shared/SideNav.jsx`, `frontend/src/App.jsx`
+
+#### Page sections (14 total)
+
+All content pulled verbatim from the team's Complete Design Process document. No trimming, no summarisation.
+
+1. **Hero** with masked-reveal headline, emerald "RESEARCH & DESIGN PROCESS" eyebrow pill, and a prominent "Open the full document" button linking to the canonical Google Doc.
+2. **Table of contents** — one-column on mobile, two-column on desktop. Anchor links to every section.
+3. **Stat callouts row** — four big-number cards (32% food insecurity, 69% single-parent rate, 4.2% meeting fruit+veg guidelines, 60% of food budgets on unhealthy food).
+4. **Six Barrier sections (A–F)** — Diet Quality, Financial Barriers, Socioeconomic Gradient, Time/Convenience, Food Literacy, Intention-Behaviour Gap. Each rendered as a collapsible `<details>` card with Findings / Possible Implications / Evidence subsections. First card expanded by default so the pattern is visible on load; the rest collapsed to keep the page scrollable. Every evidence block cites its source with an external-link icon.
+5. **Synthesis of Research Findings** — prose, five paragraphs, pulled verbatim.
+6. **Broad Lotus Blossom (9×9)** — full 81-cell grid. Dark emerald cell marks the central challenge ("Responsible and Healthy Food Consumption"), light emerald cells mark the 8 surrounding themes, default cells hold the 64 sub-themes. Horizontal scroll on narrow viewports via `overflow-x-auto` + `min-width: 880px` on the table. Small caption explains the scroll behaviour.
+7. **Focus Area** prose — narrows to budget-constrained healthy eating among food-insecure households.
+8. **Focused Lotus Blossom (9×9)** — second full grid, zoomed in on the focus area. Same rendering.
+9. **News Article Analysis** — three theme cards (budget trade-offs, decision fatigue, cooking confidence), each with source citation.
+10. **Target Audience** prose — low-income adults with moderate food insecurity.
+11. **Problem Statement** — emerald-gradient pull-quote card with noise texture, same treatment as the Roadmap feedback CTA.
+12. **Persona (Sarah)** — two-column card: left rail has avatar, name, age, location, household, income, housing; right has Background + Goals / Barriers / Behaviours / Frustrations in a 2×2 sub-grid.
+13. **Empathy Map** — six tinted quadrants (Think & Feel, Hear, See, Say & Do, then Pain, Gain). Different tint per quadrant (emerald, amber, sky, violet, red, emerald) so the reader can scan structurally.
+14. **Potential Sponsors** — five cards (Foodbank Victoria, DSS, Nutrition Australia, Woolworths, Coles) with purpose + partnership rationale.
+15. **Solution Directions (10)** — grouped into four categories: Planning-focused, Decision-support, Access/Support, Capability-building.
+16. **Concept Evaluation** — what was borrowed from Arsh's proposal and Shimmin's proposal, including the dataset lists.
+17. **Key Features (18 full)** — every feature rendered as its own card with a numbered badge and verbatim description. No consolidation, no cross-linking to the Roadmap.
+18. **Footer CTA** — "Open the full document" repeated at the bottom in a prominent emerald band.
+
+#### Animations
+
+- Masked-reveal hero (same per-word fade pattern used on the Roadmap).
+- `RevealBlock` wrapper fades every section up on `useInView({ once: true, margin: '-80px' })`.
+- Per-card fade-up on the three news article cards (60 ms stagger).
+- `prefers-reduced-motion` fallback replaces the masked-reveal with static text; the rest of the page degrades gracefully because all sections use `useInView` with `once: true`.
+- No micro-demos, no parallax, no scroll-synced timeline.
+
+#### Entry point
+
+- **Sidebar nav link** — "Our process" with the `hub` icon, added after "What's next" in `SideNav.jsx`. Placed last so existing muscle memory isn't disrupted.
+- No Dashboard widget. The page is a reference document, not a daily-use surface; it doesn't need a second discovery path.
+
+### Notes for maintainers
+
+- **The page is long by design.** Content is verbatim because the user explicitly rejected trimming. Both 9×9 lotus blossoms are rendered as real HTML tables with horizontal scroll, not simplified. All 18 features are cards. All 10 solution directions are cards. All 5 sponsors are cards. If future iterations need to trim, do it selectively (e.g., collapse all barrier cards by default) rather than cutting content.
+- **`DOC_URL` at the top of `ProcessPage.jsx`** points at the team's Google Doc. Swap if the canonical document moves.
+- **Lotus blossom cell data** lives in two arrays (`BROAD_LOTUS`, `FOCUSED_LOTUS`) at module top. Each is an array of 9 rows × 9 cells. Cell shape: `{ t: string, theme?, centre?, emphasis? }`. The `theme` flag tints the cell light-emerald, `centre` tints dark-emerald, `emphasis` tints red for the one flagged "Food environments" cell that the team wanted to highlight visually.
+- **Table semantics:** the lotus blossoms use `<table>` / `<tbody>` / `<tr>` / `<td>` (not `<div>` grid) because they *are* tabular data. Screen readers will navigate them as tables.
+- **Collapsible sections** use native `<details>`/`<summary>` — no JS state, no aria bookkeeping. The browser handles it.
+- **Bundle size** jumped ~75 kB with this page (from 647 to 722 kB gzipped is 183 kB now). Content is static strings so the cost is one-time; no per-user overhead.
+- **Citation links** all open in a new tab with `rel="noopener noreferrer"` and an `aria-label` that includes the full source name, so screen readers announce them clearly. Every external link has a small `open_in_new` icon.
+
+---
+
 ## [1.15.0] — 2026-04-24
 
 ### Added — Client-side password gate on app entry

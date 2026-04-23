@@ -11,6 +11,7 @@ import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
 import ProfilePage from './modules/dashboard/myProfile'
 import RoadmapPage from './modules/roadmap/RoadmapPage'
+import ProcessPage from './modules/process/ProcessPage'
 import NotFoundPage from './modules/system/NotFoundPage'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/upload-receipt" element={<UploadReceiptPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
+          <Route path="/process" element={<ProcessPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
