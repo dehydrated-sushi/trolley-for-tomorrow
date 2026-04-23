@@ -26,7 +26,17 @@ def create_app():
     jwt.init_app(app)
     limiter.init_app(app)
     Bcrypt(app)
-    CORS(app, origins=Config.CORS_ORIGINS)
+    
+    CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+        ]
+    }
+})
 
     # Register error handlers
     register_error_handlers(app)
