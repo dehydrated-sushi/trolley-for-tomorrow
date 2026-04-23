@@ -5,6 +5,27 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [2.2.0] — 2026-04-24
+
+### Changed — Rail popover recipe names open the detail modal (no more nav-to-Meals)
+
+- The "Completes N recipes" popover that surfaces on hover/focus of `complete_recipes` and `from_favourites` rail chips previously routed each recipe name to `/meals?highlight=<id>`. That path silently failed when the target recipe wasn't on the currently-rendered page of recommendations (Meals is paginated at 20; any recipe on page 3+ would simply not exist in the DOM for the highlight effect to latch onto).
+- Clicking a recipe name now opens `shared/RecipeDetailModal` on top of the Shopping page, fetching the single recipe via `GET /api/meals/recipe/:id` and rendering the full detail view (hero image, meta, ingredients grid, numbered steps, nutrition grid). Same pattern already used by the TopNav recipe search.
+- Popover closes on click; the modal opens in its place with a scrim + backdrop-blur. A secondary "Open on Meals page" footer button remains available for users who do want the recommendation-context view.
+
+### Plumbing
+
+- `ShoppingListPage` gained an `openRecipeId` state and an `onOpenRecipe` callback passed down through `Rail` → `RailItem`.
+- `RecipeDetailModal` mounted once at the page level (below `<MorphGhost>`).
+- `<Link to="/meals?highlight=...">` in the popover replaced with a `<button>` that fires `setPopOpen(false)` + `onOpenRecipe(r.id)`.
+
+### Notes for maintainers
+
+- The modal renders via a React portal (`createPortal` in `RecipeDetailModal`), so it escapes any ancestor containing block. Safe to open from the Shopping page, from TopNav search, or from anywhere else that triggers it.
+- The old `?highlight=<id>` deep-link pattern is still used by: (a) the Favourites modal's "Open on Meals page" footer button, (b) `RecipeDetailModal`'s own "Open on Meals page" footer button. Both of those explicitly want the Meals-page context and accept that the card has to already be on the rendered page. Don't "consistency-fix" those to also use the modal — they're intentionally different intents.
+
+---
+
 ## [2.1.0] — 2026-04-24
 
 ### Changed — Hierarchy pass

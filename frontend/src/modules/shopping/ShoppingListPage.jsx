@@ -5,6 +5,7 @@ import { apiFetch } from '../../lib/api'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
 import { toast } from '../../shared/toastBus'
+import RecipeDetailModal from '../../shared/RecipeDetailModal'
 import {
   getItems     as getShoppingItems,
   addItem      as addShoppingItem,
@@ -74,6 +75,13 @@ export default function ShoppingListPage() {
   // replaces the first (unlikely in real usage).
   const listTargetRef = useRef(null)
   const [morph, setMorph] = useState(null) // { id, label, category, fromRect, toRect }
+
+  // Rail-popover recipe detail — when a user clicks a recipe name in the
+  // "Completes N recipes" popover, the modal opens here instead of
+  // navigating to /meals?highlight=<id>. Same fix we applied to TopNav
+  // search: the Meals page is paginated, so highlight-on-arrival silently
+  // fails if the recipe isn't on the currently-rendered page.
+  const [openRecipeId, setOpenRecipeId] = useState(null)
 
   // Keep `items` synced with the shared shoppingList store (updates from
   // this page, other components like Meals, or another tab).
@@ -241,6 +249,7 @@ export default function ShoppingListPage() {
             loading={railsLoading}
             emptyCopy="Your top recipes all match what's in your fridge — nothing to add!"
             onAdd={(it, rect) => handleRailAdd(it.name, 'recipe', rect)}
+            onOpenRecipe={setOpenRecipeId}
             withCompletes
           />
           <Rail
@@ -252,6 +261,7 @@ export default function ShoppingListPage() {
             loading={railsLoading}
             emptyCopy="Star recipes on the Meals page and we'll suggest what you're missing."
             onAdd={(it, rect) => handleRailAdd(it.name, 'favourite', rect)}
+            onOpenRecipe={setOpenRecipeId}
             withCompletes
           />
         </motion.div>
@@ -439,6 +449,12 @@ export default function ShoppingListPage() {
       </section>
 
       <MorphGhost morph={morph} onDone={() => setMorph(null)} />
+
+      <RecipeDetailModal
+        open={openRecipeId != null}
+        recipeId={openRecipeId}
+        onClose={() => setOpenRecipeId(null)}
+      />
     </div>
   )
 }
@@ -513,7 +529,7 @@ function MorphGhost({ morph, onDone }) {
 // `withCompletes` is true, hovering/focusing a chip reveals a popover with
 // linkable recipe names that navigate to /meals?highlight=<id>.
 
-function Rail({ title, accent, icon, description, items, loading, emptyCopy, onAdd, withCompletes }) {
+function Rail({ title, accent, icon, description, items, loading, emptyCopy, onAdd, onOpenRecipe, withCompletes }) {
   return (
     <motion.div
       variants={{
@@ -561,6 +577,7 @@ function Rail({ title, accent, icon, description, items, loading, emptyCopy, onA
               key={`${title}:${it.name}`}
               item={it}
               onAdd={onAdd}
+              onOpenRecipe={onOpenRecipe}
               withCompletes={withCompletes}
             />
           ))}
@@ -579,7 +596,7 @@ function Rail({ title, accent, icon, description, items, loading, emptyCopy, onA
 // (when `withCompletes` is true). Items already in the shopping list render
 // as muted "added" pills and are non-interactive.
 
-function RailItem({ item, onAdd, withCompletes }) {
+function RailItem({ item, onAdd, onOpenRecipe, withCompletes }) {
   const info = getCategoryInfo(item.category || 'other')
   const [popOpen, setPopOpen] = useState(false)
   const already = inShopping(item.name)
@@ -653,13 +670,17 @@ function RailItem({ item, onAdd, withCompletes }) {
             <ul className="space-y-1.5">
               {item.completes.slice(0, 5).map((r) => (
                 <li key={r.id}>
-                  <Link
-                    to={`/meals?highlight=${r.id}`}
-                    className="inline-flex items-center gap-1 text-sm text-on-surface hover:text-primary font-medium"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPopOpen(false)
+                      onOpenRecipe?.(r.id)
+                    }}
+                    className="inline-flex items-center gap-1 text-sm text-on-surface hover:text-primary font-medium text-left"
                   >
                     <span className="material-symbols-outlined text-sm text-primary">arrow_forward</span>
                     {r.name}
-                  </Link>
+                  </button>
                 </li>
               ))}
             </ul>

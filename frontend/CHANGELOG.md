@@ -5,6 +5,35 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.14.0] — 2026-04-24
+
+### Added — TopNav recipe search
+
+The decorative `Search recipes...` input in the top nav is now functional. Spotlight-style keyboard-driven tool; pill input with attached dropdown, not a modal.
+
+**Modules:** `backend/modules/meal_plan` (new `/search` endpoint), `frontend/src/shared/SearchDropdown.jsx` (new), `frontend/src/shared/TopNav.jsx`
+
+#### Backend
+
+- `GET /api/meals/search?q=<query>&limit=8` — `ILIKE '%q%'` against `recipes.name`, prefix matches rank above substring matches, ties broken alphabetically on `LOWER(name)`. Returns `{ id, name, calories, minutes, match_type }`. 2-character minimum enforced server-side.
+
+#### Frontend
+
+- **`shared/SearchDropdown.jsx`** — new component. Focus lights an emerald ring (kills the browser's default blue which clashed with the palette). Typing debounces 250 ms then fires, with a sequence counter guarding against out-of-order responses.
+- **Attached dropdown** — when open, the input rounds only its top corners and the dropdown takes the bottom radius, visually becoming one shape. Rejected the floating-panel-with-gap alternative as it reads like a legacy dropdown.
+- **Result row** — 40×40 thumbnail (Pixabay-backed via the existing `/recipe-image/:id` endpoint, first-letter emerald fallback on 404), recipe name with matched substring bolded in emerald, kcal + minutes meta in a monospace sub-line, and an `↵` hint on the active row.
+- **Keyboard navigation**: Arrow keys move highlight, Enter navigates, first Esc closes dropdown, second Esc blurs the input. Mouse-hover also moves highlight so keyboard and mouse stay in sync.
+- **Loading affordance** — thin 2 px emerald bar under the input while fetching (not an icon swap on the magnifying glass, which is jarring at small sizes and triggers the classic "did I do anything?" problem).
+- **Selection closes the loop** — picking a result navigates to `/meals?highlight=<id>`, which reuses the existing scroll-and-pulse deep link and auto-expand-on-highlight behaviour from the Meals page.
+
+### Notes for maintainers
+
+- The shared layout surfaces (TopNav ↔ Meals page ↔ Shopping page rails ↔ Favourites modal) all converge on the same `/meals?highlight=<id>` deep-link pattern. If you change the highlight contract (param name, consumed-immediately behaviour, or the pulse duration), grep for `?highlight=` across the frontend — four surfaces depend on it.
+- Don't lower the 2-character `MIN_QUERY_LEN` threshold. Single-character queries return noisy results and load the backend with every keystroke.
+- The `fetchSeqRef` sequence counter inside `SearchDropdown` is load-bearing. Without it, a slow response for "co" can arrive after the faster response for "coco" and overwrite the newer results with stale ones. Tested manually by throttling the network tab.
+
+---
+
 ## [1.13.0] — 2026-04-24
 
 ### Added — Forward-looking `/roadmap` page

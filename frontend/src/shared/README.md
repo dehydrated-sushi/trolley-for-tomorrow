@@ -41,6 +41,27 @@ toast.show({
 
 ---
 
+## Search
+
+- **`SearchDropdown.jsx`** — the TopNav recipe search bar. Input + attached dropdown; Spotlight-style keyboard-driven tool, not a browsing UI.
+
+  Behaviour:
+  - Emerald focus ring (not the browser default blue, which clashes with the palette).
+  - 250 ms debounce on typing; minimum 2 characters before firing.
+  - Hits `GET /api/meals/search?q=<query>&limit=8`.
+  - Sequence-guarded fetches — a slow response for an outdated query never overwrites a fresh response for the current query (`fetchSeqRef` counter).
+  - Attached dropdown: when open, the input rounds only its top corners and the dropdown takes the bottom-radius, visually becoming one shape.
+  - Arrow keys move the highlight, Enter selects, first Esc closes the dropdown, second Esc blurs the input.
+  - Click-outside closes the dropdown but keeps focus.
+  - On select, navigates to `/meals?highlight=<id>` — reuses the Meals page's existing scroll-and-pulse deep link which also auto-expands the card's detail panel.
+  - Matched text in result rows is bolded (case-insensitive substring highlight) via a small `HighlightedName` helper.
+  - Per-result thumbnail uses `/api/meals/recipe-image/:id` with a first-letter emerald-circle fallback when the Pixabay photo is missing.
+  - Thin emerald loading bar under the input while fetching; the magnifying glass icon stays put (no swap-to-spinner, which is jarring at small sizes).
+
+  No props. Mounts once inside `TopNav.jsx`.
+
+---
+
 ## Shopping list (localStorage-backed)
 
 - **`shoppingList.js`** — per-device shopping list CRUD + fuzzy matcher. Storage key `trolley_shopping_list_v1` (versioned for forward-compatible schema changes). Every mutation notifies local subscribers immediately; cross-tab sync is via the native `storage` event.

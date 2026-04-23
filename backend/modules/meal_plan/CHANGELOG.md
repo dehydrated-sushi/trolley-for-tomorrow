@@ -5,6 +5,24 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.4.0] — 2026-04-24
+
+### Added — `GET /api/meals/search` typeahead endpoint
+
+Powers the TopNav recipe search bar.
+
+- Query params: `q` (required, minimum 2 characters; shorter returns empty), `limit` (default 8, clamped to [1, 20]).
+- Case-insensitive substring match on `recipes.name` via `ILIKE '%q%'`.
+- **Prefix-first ranking**: matches where the name starts with `q` rank above `contains` matches. Within each tier, stable alphabetical order on `LOWER(name)`. Typing "coco" surfaces "coconut curry" before "chocolate coconut cake", which is what users expect from typeahead.
+- Returns a compact shape: `{ id, name, calories, minutes, match_type: 'prefix' | 'contains' }`. Clients fetch full recipe records via the existing recommendations / favourites endpoints when they need more than a name and id to route to the right card.
+
+### Notes for maintainers
+
+- No index was added for this query. At the current ~20k recipe count, `ILIKE '%q%'` with the rank CASE runs in well under 50 ms. If the dataset ever grows by 10×, add a `pg_trgm` GIN index on `LOWER(name)` and convert the query to use `%>` similarity. Don't pre-optimise.
+- The 2-character minimum is enforced server-side (short queries return `[]`), but the frontend debounces and gates on the same threshold anyway. Belt and braces: defence against a rogue caller hammering the endpoint with single-character probes.
+
+---
+
 ## [1.3.0] — 2026-04-23
 
 ### Added — Pixabay-backed recipe hero photos
