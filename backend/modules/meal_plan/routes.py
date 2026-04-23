@@ -287,6 +287,7 @@ def get_meal_recommendations():
         recipe_result = db.session.execute(text(
             f"SELECT id, name, ingredients_clean, steps_clean, "
             f"       calories, protein, carbohydrates, sugar, "
+            f"       total_fat, saturated_fat, sodium, "
             f"       minutes, n_ingredients "
             f"FROM recipes "
             f"WHERE ingredients_clean IS NOT NULL AND ({where_sql}) "
@@ -360,6 +361,9 @@ def get_meal_recommendations():
                 "protein": m["protein"],
                 "carbohydrates": m["carbohydrates"],
                 "sugar": m["sugar"],
+                "total_fat": m["total_fat"],
+                "saturated_fat": m["saturated_fat"],
+                "sodium": m["sodium"],
                 "minutes": m["minutes"],
                 "n_ingredients": m["n_ingredients"],
                 "ingredients": ingredients_with_cat,

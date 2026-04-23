@@ -5,6 +5,21 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.1.0] — 2026-04-23
+
+### Added
+
+- **Three additional nutrition columns in the recommendation response**: `total_fat`, `saturated_fat`, `sodium`. Sourced directly from the `recipes` table (non-null across all 231,636 rows) and stored as **% Daily Value**, matching the existing `protein`, `carbohydrates`, and `sugar` fields. Added to both the `SELECT` in `/api/meals/recommendations` and to each dict in `recommendations[]`.
+- Required by the new frontend `NutritionPopover`, which converts %DV back to grams (FDA reference amounts) and computes kcal per macro.
+
+### Notes
+
+- No schema migration required — the columns already exist on `recipes`.
+- `calories` remains the only raw-kcal field in the response; every other nutrition field (now seven total) is %DV.
+- **Deployment gotcha observed during 1.0.0 → 1.1.0 iteration:** a Flask process started before the 1.0.0 sort-param changes continued serving responses without `sort`, `strict_count`, or `one_missing_count`, which silently broke the frontend sort dropdown. Running with `FLASK_ENV=development` enables Werkzeug's auto-reloader; otherwise the process must be killed and restarted after any `routes.py` edit.
+
+---
+
 ## [1.0.0] — 2026-04-23
 
 First tracked release of the meal plan module at module level. Prior work on

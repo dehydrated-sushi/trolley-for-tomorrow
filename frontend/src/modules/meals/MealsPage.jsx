@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../../lib/api'
-import CategoryTag from '../../shared/CategoryTag'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
+import NutritionPopover from './NutritionPopover'
+import SortDropdown from './SortDropdown'
 
 const SORT_OPTIONS = [
   { key: 'match',           label: 'Best match' },
@@ -40,6 +42,52 @@ const TAG_STYLES = {
   simple:       { bg: '#f3f4f6', fg: '#374151', icon: 'looks_one' },         // neutral
 }
 
+/**
+ * Elevated filter chip — white pill with category-coloured icon when
+ * inactive, fully filled with the accent colour when active.
+ * Lifts on hover, snaps on tap.
+ */
+function FilterChip({ active, onClick, icon, label, activeBg, activeFg, inactiveFg, title }) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      title={title}
+      whileHover={{
+        y: -1,
+        scale: 1.02,
+        transition: { type: 'spring', stiffness: 420, damping: 22 },
+      }}
+      whileTap={{ scale: 0.96, y: 0 }}
+      animate={{ scale: 1 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border-0"
+      style={{
+        backgroundColor: active ? activeBg : '#ffffff',
+        color: active ? activeFg : '#334155', // slate-700
+        boxShadow: active
+          ? `0 8px 20px -6px ${activeBg}80, 0 0 0 1px ${activeBg}`
+          : '0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.08)',
+      }}
+    >
+      <motion.span
+        key={active ? 'on' : 'off'}
+        initial={{ scale: 0.55, rotate: -30 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+        className="material-symbols-outlined text-[18px] inline-flex"
+        style={{
+          color: active ? activeFg : inactiveFg,
+          fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0",
+        }}
+      >
+        {icon}
+      </motion.span>
+      {label}
+    </motion.button>
+  )
+}
+
 function TagPill({ tag, tagInfo, size = 'sm' }) {
   const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
   const label = tagInfo?.label || tag
@@ -61,6 +109,7 @@ function TagPill({ tag, tagInfo, size = 'sm' }) {
 
 function RecipeCard({ meal, tagDefs }) {
   const [expanded, setExpanded] = useState(false)
+  const [ingredientsExpanded, setIngredientsExpanded] = useState(false)
   const heroCat = dominantCategory(meal)
   const heroInfo = getCategoryInfo(heroCat)
 
@@ -74,6 +123,7 @@ function RecipeCard({ meal, tagDefs }) {
     const category = typeof ing === 'string' ? 'other' : ing.category
     return { name, category, inFridge: matchedSet.has(name) }
   })
+  const missingIngredients = allIngredients.filter((i) => !i.inFridge)
 
   const steps = meal.steps || []
   const STEPS_PREVIEW = 4
@@ -81,7 +131,10 @@ function RecipeCard({ meal, tagDefs }) {
   const visibleSteps = showAllSteps ? steps : steps.slice(0, STEPS_PREVIEW)
 
   return (
-    <div className="bg-surface-container-lowest rounded-[2rem] overflow-hidden editorial-shadow transition-transform hover:-translate-y-1">
+    <motion.div
+      whileHover={{ y: -3, transition: { type: 'spring', stiffness: 380, damping: 26 } }}
+      className="bg-surface-container-lowest rounded-[2rem] overflow-hidden editorial-shadow"
+    >
       <div
         className="relative h-40 overflow-hidden flex items-center justify-center"
         style={{
@@ -95,9 +148,14 @@ function RecipeCard({ meal, tagDefs }) {
           {heroInfo.icon}
         </span>
         <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
-          <div className="bg-primary text-on-primary px-4 py-1.5 rounded-full font-bold text-xs tracking-wider uppercase shadow-md">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 22, delay: 0.1 }}
+            className="bg-primary text-on-primary px-4 py-1.5 rounded-full font-bold text-xs tracking-wider uppercase shadow-md"
+          >
             {Math.round(meal.match_score * 100)}% Match
-          </div>
+          </motion.div>
           {(() => {
             const missing = meal.total_ingredients - meal.match_count
             if (missing === 0) {
@@ -120,21 +178,26 @@ function RecipeCard({ meal, tagDefs }) {
 
       <div className="p-8">
         <h3 className="text-2xl font-headline font-bold text-on-surface mb-2">{meal.name}</h3>
-        <div className="flex items-center gap-3 text-on-surface-variant text-sm flex-wrap mb-4">
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">local_fire_department</span>
-            {meal.calories ? `${Math.round(meal.calories)} kcal` : 'N/A'}
-          </span>
-          {meal.minutes != null && meal.minutes > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">schedule</span>
-              {meal.minutes} min
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">egg</span>
-            {meal.match_count}/{meal.total_ingredients} in fridge
-          </span>
+        <div className="mb-4">
+          <NutritionPopover recipe={meal}>
+            <div className="flex items-center gap-3 text-on-surface-variant text-sm flex-wrap rounded-xl px-2 py-1.5 -mx-2 hover:bg-surface-container/60 transition-colors">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">local_fire_department</span>
+                {meal.calories != null ? `${Math.round(meal.calories)} kcal` : 'N/A'}
+              </span>
+              {meal.minutes != null && meal.minutes > 0 && (
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">schedule</span>
+                  {meal.minutes} min
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">egg</span>
+                {meal.match_count}/{meal.total_ingredients} in fridge
+              </span>
+              <span className="material-symbols-outlined text-[14px] opacity-50 ml-auto">info</span>
+            </div>
+          </NutritionPopover>
         </div>
 
         {/* Tag chips */}
@@ -146,75 +209,79 @@ function RecipeCard({ meal, tagDefs }) {
           </div>
         )}
 
-        {/* Category summary */}
-        {allIngredients.length > 0 && (
-          <div className="mb-6">
-            <p className="text-xs font-bold text-on-surface-variant uppercase mb-2">Recipe by category</p>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(
-                allIngredients.reduce((acc, ing) => {
-                  acc[ing.category] = (acc[ing.category] || 0) + 1
-                  return acc
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .map(([cat, count]) => (
-                  <span key={cat} className="inline-flex items-center gap-1">
-                    <CategoryTag category={cat} size="xs" />
-                    <span className="text-xs text-on-surface-variant">×{count}</span>
-                  </span>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* Full ingredient list with fridge status */}
+        {/* Missing-ingredients summary — the only useful delta when you already have a virtual fridge */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold text-primary uppercase">Ingredients</p>
-            <p className="text-xs text-on-surface-variant">
-              <span className="text-primary font-semibold">{meal.match_count} have</span>
-              {' · '}
-              <span className="text-tertiary font-semibold">
-                {meal.total_ingredients - meal.match_count} missing
-              </span>
-            </p>
-          </div>
-          <ul className="space-y-1.5">
-            {allIngredients.map((ing, i) => {
-              const info = getCategoryInfo(ing.category)
-              return (
-                <li
-                  key={`${ing.name}-${i}`}
-                  className="flex items-center gap-3 text-sm"
-                >
-                  <span
-                    className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      ing.inFridge ? '' : 'border border-outline-variant/40'
-                    }`}
-                    style={ing.inFridge ? { backgroundColor: info.colour } : undefined}
-                  >
-                    {ing.inFridge && (
-                      <span className="material-symbols-outlined text-white" style={{ fontSize: 14 }}>check</span>
-                    )}
-                  </span>
-                  <span
-                    className={ing.inFridge ? 'text-on-surface' : 'text-on-surface-variant'}
-                    style={{ fontWeight: ing.inFridge ? 500 : 400 }}
-                  >
-                    {ing.name}
-                  </span>
-                  <span
-                    className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: info.bg, color: info.colour }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{info.icon}</span>
-                    {info.label}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
+          {missingIngredients.length === 0 ? (
+            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 text-sm font-semibold">
+              <span className="material-symbols-outlined text-base">check_circle</span>
+              You have everything to make this
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 text-sm">
+              <span className="material-symbols-outlined text-tertiary text-base mt-0.5">shopping_basket</span>
+              <p className="leading-relaxed">
+                <span className="font-bold text-on-surface">Still need:</span>{' '}
+                <span className="text-on-surface-variant">
+                  {missingIngredients.map((i) => i.name).join(', ')}
+                </span>
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIngredientsExpanded((v) => !v)}
+            className="mt-2 inline-flex items-center gap-1 text-xs text-primary font-semibold hover:underline"
+          >
+            <span className="material-symbols-outlined text-sm">
+              {ingredientsExpanded ? 'expand_less' : 'expand_more'}
+            </span>
+            {ingredientsExpanded ? 'Hide full ingredient list' : `View all ${allIngredients.length} ingredients`}
+          </button>
+
+          <AnimatePresence initial={false}>
+            {ingredientsExpanded && (
+              <motion.ul
+                key="ing-list"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-1.5 mt-3 overflow-hidden"
+              >
+                {allIngredients.map((ing, i) => {
+                  const info = getCategoryInfo(ing.category)
+                  return (
+                    <li key={`${ing.name}-${i}`} className="flex items-center gap-3 text-sm">
+                      <span
+                        className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          ing.inFridge ? '' : 'border border-outline-variant/40'
+                        }`}
+                        style={ing.inFridge ? { backgroundColor: info.colour } : undefined}
+                      >
+                        {ing.inFridge && (
+                          <span className="material-symbols-outlined text-white" style={{ fontSize: 14 }}>check</span>
+                        )}
+                      </span>
+                      <span
+                        className={ing.inFridge ? 'text-on-surface' : 'text-on-surface-variant'}
+                        style={{ fontWeight: ing.inFridge ? 500 : 400 }}
+                      >
+                        {ing.name}
+                      </span>
+                      <span
+                        className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: info.bg, color: info.colour }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{info.icon}</span>
+                        {info.label}
+                      </span>
+                    </li>
+                  )
+                })}
+              </motion.ul>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Full step list (expandable) */}
@@ -248,7 +315,7 @@ function RecipeCard({ meal, tagDefs }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -350,11 +417,6 @@ export default function MealsPage() {
   const goPrev = () => setPage((p) => Math.max(1, p - 1))
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
 
-  const handleSortChange = (e) => {
-    setSortKey(e.target.value)
-    setPage(1)
-  }
-
   const filtersActive = strictOnly || hideDrinks || selectedTags.length > 0 || activePrefs.length > 0
 
   // Summary of fridge contents — shown as a one-line preview when collapsed.
@@ -387,227 +449,232 @@ export default function MealsPage() {
         <NutritionLegend />
       </header>
 
-      {/* Unified filter row — match-strictness, drinks toggle, and tag chips all together */}
-      <section className="max-w-5xl mx-auto mb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Cook without shopping (strict_only) */}
-          <button
-            type="button"
-            onClick={handleToggleStrict}
-            className={
-              strictOnly
-                ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02] bg-emerald-600 text-white'
-                : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed border-emerald-600/40 text-emerald-700 bg-transparent'
-            }
-            title={strictOnly
-              ? 'Showing only recipes where every ingredient is already in your fridge.'
-              : 'Show only recipes you can cook right now without shopping.'}
-          >
-            <span className="material-symbols-outlined text-sm">check_circle</span>
-            Cook without shopping
-          </button>
-
-          {/* Hide drinks */}
-          <button
-            type="button"
-            onClick={handleToggleDrinks}
-            className={
-              hideDrinks
-                ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02] bg-indigo-500 text-white'
-                : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed border-indigo-500/40 text-indigo-600 bg-transparent'
-            }
-            title={hideDrinks ? 'Drinks are hidden. Click to show them.' : 'Hide drink recipes from the list.'}
-          >
-            <span className="material-symbols-outlined text-sm">local_bar</span>
-            Hide drinks
-          </button>
-
-          {/* Recipe-property tag chips */}
-          {Object.entries(tagDefs).map(([tag, info]) => {
-            const active = selectedTags.includes(tag)
-            const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => handleToggleTag(tag)}
-                className={
-                  active
-                    ? 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold shadow-sm transition-all scale-[1.02]'
-                    : 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity border border-dashed'
-                }
-                style={{
-                  backgroundColor: active ? style.fg : 'transparent',
-                  color: active ? 'white' : style.fg,
-                  borderColor: active ? style.fg : `${style.fg}55`,
-                }}
-                title={info.description}
-              >
-                <span className="material-symbols-outlined text-sm">{style.icon}</span>
-                {info.label}
-              </button>
-            )
-          })}
-
-          {(selectedTags.length > 0 || strictOnly || hideDrinks) && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedTags([])
-                setStrictOnly(false)
-                setHideDrinks(false)
-                setPage(1)
-              }}
-              className="ml-2 text-xs text-on-surface-variant hover:text-primary underline underline-offset-4"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Dietary preferences indicator — quieter, about profile settings not page filters */}
-      <section className="max-w-5xl mx-auto mb-6">
-        {activePrefs.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="uppercase tracking-widest text-on-surface-variant font-bold">Diet:</span>
-            {activePrefs.map((pref) => (
-              <span
-                key={pref}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-tertiary-container/30 text-on-tertiary-container font-semibold"
-              >
-                <span className="material-symbols-outlined text-xs">restaurant</span>
-                {prefLabels[pref] || pref}
-              </span>
-            ))}
-            <Link to="/profile" className="text-primary font-semibold hover:underline ml-1">
-              Edit
-            </Link>
-          </div>
-        ) : (
-          <span className="text-xs text-on-surface-variant/70">
-            No dietary filters active ·{' '}
-            <Link to="/profile" className="text-primary font-semibold hover:underline">
-              Edit in Profile
-            </Link>
-          </span>
-        )}
-      </section>
-
       {error && (
         <div className="max-w-5xl mx-auto mb-8 p-4 rounded-2xl bg-error-container/30 text-error text-sm font-medium">
           Could not load recommendations: {error}
         </div>
       )}
 
+      {/* Filter & sort bar — lightweight, two clearly separated groups */}
+      <section className="max-w-5xl mx-auto mb-5 space-y-4">
+
+        {/* Group 1 — Show (global modes) */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold shrink-0">
+            Show
+          </span>
+          <FilterChip
+            active={strictOnly}
+            onClick={handleToggleStrict}
+            icon="check_circle"
+            label="Cook without shopping"
+            activeBg="#059669"
+            activeFg="#ffffff"
+            inactiveFg="#047857"
+            title={strictOnly
+              ? 'Showing only recipes where every ingredient is already in your fridge.'
+              : 'Only show recipes you can cook right now without buying anything.'}
+          />
+          <FilterChip
+            active={hideDrinks}
+            onClick={handleToggleDrinks}
+            icon="local_bar"
+            label="Hide drinks"
+            activeBg="#6366f1"
+            activeFg="#ffffff"
+            inactiveFg="#4f46e5"
+            title={hideDrinks ? 'Drinks are hidden. Click to show them.' : 'Hide beverage-only recipes.'}
+          />
+
+          <div className="ml-auto">
+            <SortDropdown
+              value={sortKey}
+              options={SORT_OPTIONS}
+              onChange={(v) => {
+                setSortKey(v)
+                setPage(1)
+              }}
+              label="Sort"
+            />
+          </div>
+        </div>
+
+        {/* Group 2 — Recipe type tag filters (drink tag hidden; Hide-drinks covers it) */}
+        {Object.keys(tagDefs).length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold shrink-0">
+              Recipe type
+            </span>
+            {Object.entries(tagDefs)
+              .filter(([tag]) => tag !== 'drink')
+              .map(([tag, info]) => {
+                const active = selectedTags.includes(tag)
+                const style = TAG_STYLES[tag] || { bg: '#f3f4f6', fg: '#6b7280', icon: 'label' }
+                return (
+                  <FilterChip
+                    key={tag}
+                    active={active}
+                    onClick={() => handleToggleTag(tag)}
+                    icon={style.icon}
+                    label={info.label}
+                    activeBg={style.fg}
+                    activeFg="#ffffff"
+                    inactiveFg={style.fg}
+                    title={info.description}
+                  />
+                )
+              })}
+
+            {(selectedTags.length > 0 || strictOnly || hideDrinks) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTags([])
+                  setStrictOnly(false)
+                  setHideDrinks(false)
+                  setPage(1)
+                }}
+                className="ml-1 text-xs font-semibold text-on-surface-variant hover:text-primary underline underline-offset-4"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Active-sort indicator (only when non-default) */}
+        <AnimatePresence>
+          {sortKey !== 'match' && (
+            <motion.div
+              key="sort-indicator"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+              className="flex"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSortKey('match')
+                  setPage(1)
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/15 transition-colors"
+                title="Reset to Best match"
+              >
+                <span className="material-symbols-outlined text-sm">sort</span>
+                Sorted by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label ?? sortKey}
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Meta line — fridge summary · diet · results count */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-on-surface-variant">
+          {availableItems.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setFridgeExpanded((v) => !v)}
+              className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined text-primary text-base">kitchen</span>
+              <span className="font-bold text-on-surface">{fridgeSummary?.count} ingredients</span>
+              {fridgeSummary?.top?.length > 0 && (
+                <span className="hidden sm:inline">· {fridgeSummary.top.join(', ')}</span>
+              )}
+              <motion.span
+                animate={{ rotate: fridgeExpanded ? 180 : 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="material-symbols-outlined text-sm"
+              >
+                expand_more
+              </motion.span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-base">kitchen</span>
+              No fridge items yet ·{' '}
+              <Link to="/upload-receipt" className="text-primary font-semibold hover:underline">
+                Upload a receipt
+              </Link>
+            </span>
+          )}
+
+          {activePrefs.length > 0 && (
+            <>
+              <span aria-hidden="true" className="hidden md:block h-4 w-px bg-outline-variant/40" />
+              <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="uppercase tracking-widest font-bold">Diet:</span>
+                {activePrefs.map((pref) => (
+                  <span
+                    key={pref}
+                    className="px-2 py-0.5 rounded-full bg-tertiary-container/40 text-on-tertiary-container font-semibold"
+                  >
+                    {prefLabels[pref] || pref}
+                  </span>
+                ))}
+                <Link to="/profile" className="text-primary font-semibold hover:underline ml-1">
+                  Edit
+                </Link>
+              </span>
+            </>
+          )}
+
+          <div className="ml-auto text-xs">
+            {loading
+              ? 'Finding recipes…'
+              : total === 0
+                ? 'No matching recipes'
+                : `${total} ${total === 1 ? 'recipe' : 'recipes'} · showing ${Math.min((page - 1) * PER_PAGE + 1, total)}–${Math.min(page * PER_PAGE, total)}`}
+          </div>
+        </div>
+
+        {/* Expanded fridge panel */}
+        <AnimatePresence initial={false}>
+          {fridgeExpanded && availableItems.length > 0 && (
+            <motion.div
+              key="fridge-expanded"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="rounded-2xl bg-surface-container-low/60 p-4">
+                <div className="flex flex-wrap gap-2">
+                  {availableItems.map((item) => {
+                    const name = typeof item === 'string' ? item : item.name
+                    const cat = typeof item === 'string' ? 'other' : item.category
+                    const info = getCategoryInfo(cat)
+                    return (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-medium text-sm"
+                        style={{ backgroundColor: info.bg, color: info.colour }}
+                        title={`${info.label} — ${info.description}`}
+                      >
+                        <span className="material-symbols-outlined text-sm">{info.icon}</span>
+                        {name}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
       {loading && (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-48">
           <p className="text-on-surface-variant animate-pulse text-lg">Finding recipes from your fridge...</p>
         </div>
       )}
 
       {!loading && !error && (
         <>
-          <section className="max-w-5xl mx-auto mb-12">
-            <div className="bg-surface-container-low rounded-3xl px-6 py-4 editorial-shadow">
-              {availableItems.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="material-symbols-outlined text-primary">auto_awesome</span>
-                      <span>
-                        <span className="font-bold text-on-surface">
-                          {fridgeSummary?.count} ingredients
-                        </span>
-                        {fridgeSummary?.top?.length > 0 && (
-                          <span className="text-on-surface-variant">
-                            {' · '}strongest in {fridgeSummary.top.join(' and ')}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFridgeExpanded((v) => !v)}
-                      className="inline-flex items-center gap-1 text-xs text-primary font-semibold hover:underline"
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        {fridgeExpanded ? 'expand_less' : 'expand_more'}
-                      </span>
-                      {fridgeExpanded ? 'Hide' : 'View all'}
-                    </button>
-                  </div>
-
-                  {fridgeExpanded && (
-                    <div className="mt-4 pt-4 border-t border-outline-variant/15 flex flex-wrap gap-2">
-                      {availableItems.map((item) => {
-                        const name = typeof item === 'string' ? item : item.name
-                        const cat = typeof item === 'string' ? 'other' : item.category
-                        const info = getCategoryInfo(cat)
-                        return (
-                          <span
-                            key={name}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium text-sm"
-                            style={{ backgroundColor: info.bg, color: info.colour }}
-                            title={`${info.label} — ${info.description}`}
-                          >
-                            <span className="material-symbols-outlined text-sm">{info.icon}</span>
-                            {name}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-on-surface-variant text-sm">
-                  No fridge items found.{' '}
-                  <Link to="/upload-receipt" className="text-primary font-bold hover:underline">Upload a receipt</Link> first.
-                </p>
-              )}
-            </div>
-          </section>
-
           <section className="max-w-5xl mx-auto">
-            <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
-              <div>
-                <h2 className="text-2xl font-headline font-bold text-on-surface mb-1">
-                  {total === 0
-                    ? 'No matching recipes'
-                    : strictCount > 0
-                      ? `${strictCount} ${strictCount === 1 ? 'recipe matches' : 'recipes match'} everything in your fridge`
-                      : oneMissingCount > 0
-                        ? `${oneMissingCount} ${oneMissingCount === 1 ? 'recipe needs' : 'recipes need'} just 1 more item`
-                        : 'Top matches from your fridge'}
-                </h2>
-                {total > 0 && (
-                  <p className="text-sm text-on-surface-variant">
-                    {strictCount > 0 && oneMissingCount > 0 && (
-                      <>{oneMissingCount} more {oneMissingCount === 1 ? 'needs' : 'need'} just 1 item · </>
-                    )}
-                    Showing {Math.min((page - 1) * PER_PAGE + 1, total)}–{Math.min(page * PER_PAGE, total)} of {total}
-                  </p>
-                )}
-              </div>
-
-              {total > 0 && (
-                <div className="flex items-center gap-2">
-                  <label htmlFor="sort-select" className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                    Sort by
-                  </label>
-                  <select
-                    id="sort-select"
-                    value={sortKey}
-                    onChange={handleSortChange}
-                    className="px-4 py-2 rounded-full bg-surface-container-high text-on-surface text-sm font-semibold border-none focus:ring-2 focus:ring-primary/40"
-                  >
-                    {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.key} value={opt.key}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
 
             {recommendations.length === 0 && (
               <div className="flex flex-col items-center justify-center h-48 text-center">

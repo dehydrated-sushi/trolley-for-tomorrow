@@ -5,6 +5,59 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.6.0] — 2026-04-23
+
+### Fixed — Blank Meals page on load
+
+**Module:** `frontend/src/modules/meals`
+
+- `MealsPage.jsx` used `<AnimatePresence>` without importing it. React threw `AnimatePresence is not defined` on first render and the entire `/meals` route rendered empty. Import fixed to `import { motion, AnimatePresence } from 'framer-motion'`. This was the root cause of the "page shows blank" report from the last user test.
+
+### Added — Real nutrition popover and custom sort dropdown
+
+**Module:** `frontend/src/modules/meals`
+
+- **`NutritionPopover.jsx`** — hover/focus popover wrapping each recipe card's meta strip. Reads six percent-Daily-Value columns (`protein`, `carbohydrates`, `total_fat`, `sugar`, `saturated_fat`, `sodium`) plus raw-kcal `calories` from the meal response; converts %DV → grams via FDA reference amounts, then to kcal per macro (4/4/9) before computing each macro's share of total energy. Renders a stacked macro bar, per-macro rows (grams · kcal · % of macro calories), and an "Also in this serving" block. Exports `computeMacros()` separately for reuse.
+- **`SortDropdown.jsx`** — themed Framer-Motion dropdown replacing the native `<select>`. Click-outside close, Escape close, stagger-in option entrance, rotating chevron, `✓` on the selected option. Accessible: `aria-haspopup`, `aria-expanded`, `role="listbox"`, `role="option"`, `aria-selected`.
+- **Active-sort indicator pill** — when `sortKey !== 'match'`, a small `Sorted by <label> ✕` pill appears below the filter bar. Click to reset to Best match. Addresses the user-visible problem that changing sort felt silent.
+- **`FilterChip` component** — white pill with category-coloured icon when inactive, fully filled on active. Spring hover-lift (`y: -1`, `scale: 1.02`) and tap snap. Material-symbols icon variable-font flips to `FILL 1` when active to reinforce the state change.
+
+### Changed — Filter bar redesigned (two explicit groups, lighter treatment)
+
+**Module:** `frontend/src/modules/meals`
+
+- Filter section rebuilt from the 1.5.0 heavy-card single row into **two clearly labelled rows with no wrapping card**:
+  - **Show** — global modes (`Cook without shopping`, `Hide drinks`) with the `Sort` dropdown pushed right.
+  - **Recipe type** — the tag-chip group.
+- **`drink` tag filtered out of the tag row.** `Hide drinks` already covers the sensible use case; exposing both a positive-`Drink` chip and a negative-`Hide drinks` mode on the same page was a UX conflict flagged during review.
+- **Meta line consolidated** into a single horizontal row: fridge summary toggle · `Diet: …` · results count (`N recipes · showing X–Y`). The separate "Ranked Recommendations" header from 1.5.0 is gone; the count now lives in the meta line.
+- **Expanded fridge panel** restyled as a light translucent container (was a bordered white card in 1.5.0) that sits under the meta line when toggled open.
+
+### Changed — Recipe card ingredient block
+
+**Module:** `frontend/src/modules/meals`
+
+- The always-on full ingredient list (with category-coloured ✓ ticks) is **collapsed behind a "View all N ingredients" disclosure** by default. The default view now shows a single summary line:
+  - `Still need: <comma-separated missing items>` — when some ingredients are missing, or
+  - `You have everything to make this` — when `match_count === total_ingredients`.
+- Rationale: in a fridge-keyed experience, the useful delta is *what's missing*. Showing every ingredient on every card duplicated information already conveyed by the hero match badge and `Need N items` pill.
+
+### Removed
+
+**Module:** `frontend/src/modules/meals`
+
+- Unused `CategoryTag` import (the per-card "Recipe by category" block that used it was already removed in 1.5.0's layout pass).
+- `handleSortChange(e)` native-select handler — `SortDropdown`'s direct-key `onChange` replaces it.
+
+### Notes for maintainers
+
+- **This release reintroduces framer-motion animations on the Meals page.** The 1.5.0 maintainer note stating "The Meals page has no framer-motion animations" is superseded. Animations in use: `FilterChip` spring hover, `RecipeCard` hover lift, match-score pill scale-in, `NutritionPopover` slide-in, `SortDropdown` stagger + chevron rotate, sort-indicator enter/exit, fridge-expand height animation, ingredient-disclosure expand. **No parent-level `variants={stagger}` / child `variants={riseIn}` pattern is used** — the Dashboard regression from 1.3.0 is deliberately avoided.
+- DB nutrition values in the `recipes` table are **% Daily Value, not grams** (except `calories`, which is raw kcal). Any consumer surfacing nutrition must either route through `NutritionPopover.computeMacros` or clearly label the unit as `%DV`.
+- Sort is computed server-side. A Flask process returning a response without a `sort` field indicates the backend pre-dates the sort-param implementation (`base_response` won't contain `sort`, `strict_count`, or `one_missing_count` either). Restart the backend after pulling `routes.py` changes. Symptom during this iteration: sort dropdown appeared to do nothing.
+- `SORT_OPTIONS` in `MealsPage.jsx` must stay in sync with `SORT_KEYS` in `backend/modules/meal_plan/routes.py`.
+
+---
+
 ## [1.5.0] — 2026-04-23
 
 ### Added — Meals page overhaul + sort dropdown

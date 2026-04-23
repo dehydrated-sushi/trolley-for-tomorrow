@@ -5,6 +5,44 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.1.0] — 2026-04-23
+
+Post-user-test polish pass: blank-page fix, filter-bar redesign, real nutrition popover backed by the actual `recipes` nutrition columns, and a custom sort dropdown replacing the native `<select>`.
+
+### Fixed
+
+- **Blank `/meals` route on first render.** `<AnimatePresence>` was used in `MealsPage.jsx` without being imported. React threw `AnimatePresence is not defined` and the entire page rendered empty. Import line updated to `import { motion, AnimatePresence } from 'framer-motion'`.
+
+### Added
+
+- **`NutritionPopover.jsx`** — hover/focus popover wrapping the recipe card's meta strip. Reads six % Daily Value columns (`protein`, `carbohydrates`, `total_fat`, `sugar`, `saturated_fat`, `sodium`) plus `calories` from the meal response; converts %DV → grams via FDA `DV_GRAMS` reference amounts, then to kcal per macro (4/4/9) before computing each macro's share of total energy. Renders a stacked macro bar, per-macro rows, and an "Also in this serving" detail block for sugar / saturated fat / sodium. `computeMacros()` is exported separately for reuse.
+- **`SortDropdown.jsx`** — themed accessible dropdown with open-on-click, close-on-outside/Escape, staggered option entrance, rotating chevron, and a ✓ on the selected option. `role="listbox"` / `role="option"` / `aria-selected` / `aria-haspopup` / `aria-expanded`. Replaces the native `<select>` used in 1.0.0. `onChange(key)` signature (not a synthetic event).
+- **Active-sort indicator pill** — `Sorted by <label> ✕` appears below the filter rows whenever `sortKey !== 'match'`. Clicking it resets to Best match. Addresses the previously-silent sort change.
+- **`FilterChip` component** — white pill with category-coloured icon when inactive, fully filled on active. Spring hover-lift and tap snap; Material Symbols variable-font flips to `FILL 1` on active.
+- **"Still need: …" summary on each recipe card** — one inline line listing only the missing ingredients. When nothing is missing, a green "You have everything to make this" pill is shown instead. The full ingredient list with ✓ ticks + category badges is preserved behind a "View all N ingredients" disclosure.
+
+### Changed
+
+- **Filter bar redesigned** from the 1.0.0 unified-single-row into two explicitly labelled rows — `Show` (global modes + sort on the right) and `Recipe type` (tag chips). No enclosing card, no drop-shadow — a lighter treatment that gives the fold back to the recipe grid. Old dashed-outline inactive style replaced with white pill + coloured icon.
+- **`drink` tag filtered out of the tag row.** Exposing both a positive-`Drink` chip and a negative-`Hide drinks` mode on the same page was actively confusing; the tag still exists in `TAG_DEFINITIONS` backend-side, it's just hidden in the filter UI.
+- **Meta line restructured** into `[fridge summary toggle] · [Diet: …] · [N recipes · showing X–Y]`. Removes the separate "Ranked Recommendations" section heading from 1.0.0 and moves the results count into the meta line.
+- **Expanded fridge panel** moved into the filter section and restyled as a light translucent container (was a bordered white card in 1.0.0).
+- **`SortDropdown.onChange` signature is `(key) => void`,** not an event. `MealsPage` wires it inline, so the `handleSortChange(e)` helper from 1.0.0 is deleted.
+
+### Removed
+
+- `CategoryTag` import (unused after 1.0.0 removed the per-card "Recipe by category" block that consumed it).
+- `handleSortChange(e)` helper (superseded by `SortDropdown`'s direct-key `onChange`).
+
+### Notes
+
+- The 1.0.0 maintainer note *"The Meals page has no framer-motion animations"* is superseded. This release uses framer-motion in `FilterChip`, `RecipeCard`, `NutritionPopover`, `SortDropdown`, the sort-indicator pill, the fridge-expand panel, and the ingredient disclosure. **No parent-level `variants={stagger}` / child `variants={riseIn}` pattern is used** — the Dashboard regression trigger is deliberately avoided.
+- DB nutrition values in `recipes` are stored as **% Daily Value, not grams** — except `calories`, which is raw kcal. Any feature surfacing nutrition must either route through `NutritionPopover.computeMacros` or clearly label the unit as `%DV`.
+- Sort is computed server-side. A Flask process returning a response *without* a `sort` field is the symptom of a backend that pre-dates the sort-param implementation (`base_response` also won't contain `strict_count` or `one_missing_count`). Restart the backend after pulling `routes.py` changes.
+- `SORT_OPTIONS` in `MealsPage.jsx` must stay in sync with `SORT_KEYS` in `backend/modules/meal_plan/routes.py`.
+
+---
+
 ## [1.0.0] — 2026-04-23
 
 First tracked release of the meals module at module level. Prior scaffolding
