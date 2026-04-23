@@ -5,6 +5,52 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.15.0] — 2026-04-24
+
+### Added — Client-side password gate on app entry
+
+A glass-morphic password overlay that renders in front of the whole app until the correct password is entered. Deterrent for casual viewers (other FIT5120 teams stumbling into the demo URL), not a real security boundary.
+
+**Modules:** `frontend/src/shared/PasswordGate.jsx` (new), `frontend/src/App.jsx`
+
+#### What it does
+
+- On first visit: a backdrop-blur overlay covers the entire viewport with a centred glass card (`rounded-3xl`, `backdrop-filter: blur(32px)`, subtle radial emerald tint on the scrim). Animated lock icon on the card pulses at 2.2 s intervals.
+- Password input is autofocused, emerald focus ring replaces the browser's default blue. Submit arrow fades in next to the input when the field has characters.
+- Correct password: card flashes emerald-100 (220 ms), then scale-fades out (320 ms), then the scrim itself fades out. Total exit ~700 ms. Full app becomes interactive.
+- Wrong password: input shake (`x: [0, -6, 6, -4, 4, 0]` over 420 ms) + red border flash (620 ms fade back) + "That's not the password." error text fades in below. Input clears, refocuses. Error clears on next keystroke.
+- Unlock persists in `localStorage` under `trolley_gate_unlocked_v1`. On subsequent visits the gate never renders: no flash, no delay, no user-visible overhead.
+
+#### Deliberately not security
+
+- The password is stored as a **SHA-256 hex hash** in the source (`EXPECTED_HASH`), not the literal word. A grep on the compiled JS bundle won't surface the password string. Raises the floor against casual source-view; still bypassable.
+- Bypass is still ~5 seconds for anyone with DevTools: `localStorage.setItem('trolley_gate_unlocked_v1', 'true')` and refresh.
+- The **backend API is not gated by this**. `curl` against any endpoint returns data as before. Real auth is tracked separately on the iteration 2 security roadmap.
+- The app tree is fully rendered behind the blurred scrim (which is the whole point of the "glass" aesthetic). Someone with a DOM inspector can still read content through the blur. This is a "looks cool / keeps casual classmates out" feature, not a "stops people" feature. Documented at the top of the component.
+
+#### Accessibility + polish
+
+- Wrapped app tree gets the **`inert` attribute** (set via ref + `setAttribute` for cross-React-version compatibility) while locked. Prevents keyboard tab-navigation from focusing inputs under the blur.
+- `prefers-reduced-motion` fallback: skips card drop-in, lock pulse, shake keyframes, and scrim fade. Instant render, instant unlock transition.
+- Enter key submits; autofocus on both initial mount and after wrong-password clears.
+- `aria-modal="true"`, `role="dialog"`, `aria-labelledby`, and `aria-live="polite"` on the error text.
+
+#### Adjustments from the original spec
+
+- **Dropped the 500 ms pre-delay** on the card drop-in. The original plan had the backdrop fade in for 400 ms, then the card drop in after another 500 ms — that's nearly a second of app visible unblurred on first load. Gate is up instantly now; the card uses a tight spring (260 stiffness / 22 damping) to feel like it was always there.
+- **Hashed the password.** `'hunger' === input` became `sha256(input) === '<precomputed>'`. 5 minutes of work, means the literal word doesn't appear in the bundle.
+- **Added `inert` on the wrapped app tree** in addition to `pointer-events-none`. The spec blocked pointer events but not keyboard focus traversal. Tab would have leaked focus into forms under the blur without this.
+
+### Notes for maintainers
+
+- To test the locked state: `localStorage.removeItem('trolley_gate_unlocked_v1')` and refresh, or open an incognito window.
+- To change the password: recompute `printf "%s" "<new>" | shasum -a 256` and swap the `EXPECTED_HASH` constant. No user migration needed — any pre-existing unlocked localStorage entries remain valid since the key doesn't encode which password unlocked it.
+- The storage key is versioned (`_v1`). If the gate's persistence semantics change (e.g., add an expiry or tie unlock to a server token), bump to `_v2` so existing installs re-prompt.
+- Gate is mounted **outside** `<BrowserRouter>` in `App.jsx` so it covers every route — the public `/` homepage, `/login`, `/signup`, and all `/dashboard` / `/fridge` / etc. shell routes. Deliberate: the marketing homepage is just as scrape-worthy as the app itself.
+- `PasswordGate` renders its overlay directly (no portal) because `App.jsx` is itself above any backdrop-filter ancestor. If you ever nest the component deeper (e.g., inside `AppShell`), wrap the `AnimatePresence` tree in `createPortal(..., document.body)` the same way `RecipeDetailModal` does, or the scrim will resolve against the nearest filtered ancestor.
+
+---
+
 ## [1.14.0] — 2026-04-24
 
 ### Added — TopNav recipe search

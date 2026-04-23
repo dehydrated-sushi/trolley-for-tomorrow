@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import AppShell from './shared/AppShell'
+import PasswordGate from './shared/PasswordGate'
 import HomePage from './modules/home/HomePage'
 import LoginPage from './modules/auth/LoginPage'
 import SignupPage from './modules/auth/SignupPage'
@@ -14,8 +15,9 @@ import NotFoundPage from './modules/system/NotFoundPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <PasswordGate>
+      <BrowserRouter>
+        <Routes>
         {/* Standalone pages (own nav/footer) */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -35,5 +37,6 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
+    </PasswordGate>
   )
 }
