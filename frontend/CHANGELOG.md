@@ -5,6 +5,50 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.9.0] — 2026-04-23
+
+### Changed — Trolley Tips is now an auto-rotating, hover-pausable carousel
+
+**Module:** `frontend/src/modules/dashboard`
+
+- The static single-tip widget from 1.8.0 becomes a carousel: a new FoodKeeper tip every 9 seconds, with a crossfade + 10 px vertical shift (`opacity 0 → 1`, `y 12 → 0 → -8`, 450 ms, cubic-bezier `[0.22, 1, 0.36, 1]`). No 3D flips, no slides, no scale — the card is a stage, the content rotates through it.
+- **Progress ring traces the card's full perimeter**, not a top-edge bar. Rendered as an SVG `<rect>` with matching rounded corners (`rx` chosen to align with the card's `rounded-[2rem]`), sized via a `ResizeObserver` so it follows the card as the layout flexes. A dim emerald-300 background stroke at `opacity 0.18` defines the track; a bright emerald-300 stroke at `opacity 0.85` paints clockwise over it, driven by `strokeDashoffset` going `1 → 0` over each 9 s window. `pathLength="1"` normalises the dasharray so the same offset value works regardless of rendered perimeter length. `strokeLinecap="round"` rounds the trace's leading edge for a polished feel. Resets each rotation, freezes mid-trace on hover.
+- **Hover / focus pauses the timer in place.** Moving away resumes the progress from where it paused — not from 0. Implemented by driving the progress with a framer-motion `MotionValue` and calling `.pause()` / `.play()` on the returned playback controls imperatively. Focus pause uses `e.currentTarget.contains(e.relatedTarget)` so tabbing into the back button doesn't unpause.
+- **Back button appears only on hover/focus**, and only when a previous tip is actually available. Positioned bottom-right, 10 px uppercase pill with an arrow icon, fades in on `x: 8 → 0`. Clicking it shows the previously displayed tip; the tip that was on screen is parked as the "next", so forward rotation resumes smoothly from there.
+- **Memory footprint is bounded**: at any moment we hold at most three tips — previous (for back button), current (on screen), next (pre-fetched to make rotations instant). No history beyond one level back.
+- **Pre-fetch on each rotation**: while the current tip is on screen, the next one is fetched in the background. Rotations therefore swap without a visible network delay. Cold-path (pre-fetch in flight when rotation fires) falls back to a direct fetch.
+- **Lightbulb and eco drift animations are unchanged and deliberately kept outside the AnimatePresence**, so the rotating content doesn't force a re-render of those decorative elements.
+- **Accessibility**: outer card is `tabIndex={0}` so keyboard users can reach and pause it. Back button has `aria-label="Show previous tip"` and gains focus-visible ring styling. All pause/resume logic works identically for hover and keyboard focus.
+
+### Notes for maintainers
+
+- Rotation duration is a module constant `TIP_DURATION_S = 10`. Change if copy testing shows people need more time.
+- The tip-change effect re-runs on every `tip` state update; `rotateRef` holds the latest `rotate` callback so the effect's dep array stays `[tip, progress]` and the animation doesn't get cancelled mid-progress when the `nextTip` pre-fetch completes.
+- If the `/api/foodkeeper/tips` endpoint is unreachable the fallback "Revive Your Greens" tip is displayed and no rotation happens (since we never get a second tip to rotate to) — the behaviour gracefully collapses to the 1.7.x static experience.
+- `FALLBACK_TIP` is exported-shaped but not exported — keep it module-local; it's a last-resort UI string, not a shared resource.
+- MotionValue-based progress bar bypasses React reconciliation per frame, so the CPU cost of the rotation itself is near-zero. The rotation cost is dominated by the `apiFetch` network round-trip, which is debounced to one concurrent request per rotation.
+
+---
+
+## [1.8.0] — 2026-04-23
+
+### Changed — Dashboard Trolley Tips now sourced from USDA FoodKeeper
+
+**Module:** `frontend/src/modules/dashboard`
+
+- The hardcoded "Revive Your Greens" tip on the Dashboard is replaced with a random deduplicated tip fetched from the new backend endpoint `GET /api/foodkeeper/tips?limit=1`. Title becomes the FoodKeeper product name (e.g. "Sugar", "Bagel", "Canned goods"); body is the USDA-authored tip text.
+- **Attribution link** added beneath the tip body: small uppercase link reading *"Source · USDA FSIS FoodKeeper Data"*, opening https://catalog.data.gov/dataset/fsis-foodkeeper-data in a new tab. Required by data.gov's attribution conventions and also demonstrates real source-backed content for tutor review.
+- **Graceful fallback**: if the fetch fails (endpoint not reachable, tables not seeded, CORS error, etc.) the previous hardcoded "Revive Your Greens" tip is shown instead. The Dashboard never renders a blank tip card.
+- Independent `apiFetch` call inside `DashboardPage.jsx`'s `useEffect` — runs in parallel with the fridge and budget fetches, failures don't cascade.
+
+### Notes for maintainers
+
+- Backend dependency: see `backend/modules/foodkeeper/` and `backend/scripts/seed_foodkeeper.py`. The seed must have been run at least once against the target database for real tips to appear — until then, the fallback renders.
+- Tip title currently uses the FoodKeeper product name verbatim. Some product names are long or slightly technical (e.g. "Chicken broth/stock/consommé"); rendering is with the existing headline style (no CSS `capitalize`, since product names already have proper casing and the slash/special chars would render oddly under title-case transform).
+- No new npm dependencies. Feature is a `useState` + single `apiFetch`.
+
+---
+
 ## [1.7.0] — 2026-04-23
 
 ### Added — Pixabay recipe hero photos (graceful fallback)
