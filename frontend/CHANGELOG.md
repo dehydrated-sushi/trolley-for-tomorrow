@@ -5,6 +5,47 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.12.0] — 2026-04-24
+
+### Added — Manual fridge CRUD + AR scan preview modal
+
+Two fridge-page features landed together. The first is real functionality (users can finally add/edit/remove items without going through a receipt upload); the second is a deliberately flashy "coming soon" preview that gives mentors a taste of where iteration 2 is going.
+
+**Modules:** `frontend/src/modules/fridge`, `backend/modules/fridge`
+
+#### Manual add / edit / delete (real feature)
+
+- **`+ Add item`** header button opens a modal with a single compact row (name, quantity, price). Autofocused name input; quantity is free-text to match the receipt review schema. Live category classification on a 300 ms debounce via `/api/ingredients/classify` — a coloured chip spring-materialises next to the input once a category is known, clickable to override.
+- **Duplicate-name detection** surfaces a tertiary-container banner with a `+1 existing` shortcut (PATCHes the existing row's qty) when the typed name matches a current fridge item case-insensitively. User can still add as a separate entry.
+- **Card-fly-to-grid morph** on save — same pattern as the Shopping page's chip-to-list morph: capture the button's bounding rect, render a fixed-position ghost, animate to the grid's first cell over 650 ms. The real card fades up in place underneath.
+- **Hover actions** (pencil, ×) on each card for edit and remove.
+- **Inline undo on delete**, 4 s window. No confirm dialog — the clicked card overlays with a surface-high panel showing "Removed {name}" + an **Undo** pill and a linear 4 s progress bar. Timer fires the real DELETE if undo isn't clicked.
+
+Backend (`backend/modules/fridge`) — new `POST`, `PATCH`, `DELETE` endpoints reusing the `receipt_items` table with sentinel `receipt_filename = 'manual_entry'` / `receipt_path = 'manual'` values so manual and OCR provenances share one schema. Downstream consumers (Meals matching, Shopping staples rail, budget calculation) treat manual rows identically to scanned ones — a user's typed chicken breast should count for meal matches exactly like a receipt-scanned one.
+
+#### AR scan preview modal (iteration 2 placeholder)
+
+- **`Scan fridge` header button** (on-surface pill with a cyan `preview` badge) opens a self-contained cyberpunk modal:
+  - Scale-from-scaleY-0.02 curtain entrance (evokes a display powering on).
+  - `AR_SYSTEM_BOOTING...` typewriter → solid-cyan `AR_SYSTEM_ACTIVE` status pill.
+  - Scan-line sweep (1.5 s cyan-glow gradient, repeats on a 1.8 s loop once detections are in).
+  - Four hardcoded detections framed with animated L-bracket corners (40 ms stagger between corners) and glassmorphic detection cards (monospace uppercase for system text, display font for item names; cyan border for new, emerald for existing).
+  - FPS/LAT HUD with realistic number flicker (±1 fps, ±3 ms, 500–900 ms jitter period).
+  - Preview ribbon `PREVIEW · SHIPPING IN ITERATION 2` top-center.
+  - Clicking any card's `+ ADD` drops an `ITERATION 2 FEATURE` banner — the only "the truth" surface in the modal; everything else is preview-as-theatre.
+- **Synthesized backdrop** — dark radial gradient + three horizontal shelf lines + four CSS item silhouettes. Zero photo dependencies. The modal runs self-contained.
+- **`prefers-reduced-motion` fallback** skips the animations but preserves the static detected state. Visual polish intact without the motion.
+- **Deliberately cyan-accented, not emerald** — reads as a different system temporarily taking over the screen, not part of the regular app chrome.
+
+### Notes for maintainers
+
+- The manual-add and AR modals are both in `frontend/src/modules/fridge/` alongside `FridgeView.jsx`. Tree: `ManualAddModal.jsx`, `ARScanModal.jsx`.
+- Ghost-morph pattern is now used twice (`MorphGhost` on Shopping, `FridgeCardMorph` on Fridge). If a third surface needs the same effect, lift to `shared/` at that point. Don't pre-lift — the two copies are small and diverge on surface-specific details.
+- `ARScanModal` uses inline hex-rgb colours for cyan and emerald accents rather than theme tokens, intentionally — theming it would blend it back into the app and lose the "foreign system" feel that makes the preview land.
+- `deleteTimersRef` cleanup on unmount fires outstanding DELETE requests so a mid-window navigation doesn't leave ghost rows in the DB after a refresh.
+
+---
+
 ## [1.11.0] — 2026-04-24
 
 ### Added — Receipt reconciliation · Favourites modal · Shopping page polish
