@@ -5,6 +5,98 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.3.0] — 2026-04-23
+
+### Added — Pixabay-backed recipe hero photos
+
+**New file:** `backend/modules/meal_plan/image_service.py` — self-contained
+Pixabay client + local byte cache.
+
+- **`GET /api/meals/recipe-image/<int:recipe_id>`** serves a cached recipe
+  hero photo, or 404 if no image is available. The frontend treats 404 as
+  "render the gradient + category-icon hero" so no broken-image placeholders
+  are ever shown.
+- On cache miss the endpoint synchronously:
+  1. Reads the recipe name from `recipes.name`.
+  2. Cleans the name into a concise Pixabay query via `_clean_query()` —
+     drops filler words (`a`, `the`, `quick`, `easy`, `best`, `original`,
+     `mom(s)`, `dad(s)`, etc.) and single-letter tokens (so `J W S Quick Coq
+     Au Vin` → `coq au vin`), then keeps the first four content words.
+  3. Hits Pixabay with `image_type=photo`, `category=food`, `safesearch=true`,
+     `orientation=horizontal`, `per_page=3` (Pixabay's minimum).
+  4. Downloads the first hit's `webformatURL` bytes to
+     `backend/data/recipe-covers/<recipe_id>.jpg`.
+  5. Inserts a row in the new `recipe_images` table (see below).
+- **Known-negative caching.** When Pixabay returns zero hits or the download
+  fails, a row is still inserted with `image_filename = NULL`. Subsequent
+  requests for the same recipe 404 immediately without re-querying Pixabay,
+  so the API key's 100-req/60-s budget is not burned on recipes with
+  unsearchable names like `smurf juice`.
+- **TOS compliance.** Pixabay's API terms forbid permanent hotlinking and
+  their `webformatURL` values expire in 24 hours, so we download the bytes
+  and serve them from our own origin. Attribution metadata (`pixabay_id`,
+  `pixabay_user`, `pixabay_user_id`, `pixabay_page_url`) is persisted with
+  each row for credit + debugging, though the current frontend only
+  surfaces a page-level "Recipe photos from Pixabay" line.
+
+**New table:** `recipe_images`, lazily created via the project's existing
+`CREATE TABLE IF NOT EXISTS` + `_TABLE_INITIALISED` idiom (same pattern as
+`user_budget` and `user_preferences` in the profile module):
+
+```
+recipe_id        INTEGER PRIMARY KEY
+image_filename   TEXT        -- NULL = known-negative
+pixabay_id       BIGINT
+pixabay_user     TEXT
+pixabay_user_id  BIGINT
+pixabay_page_url TEXT
+fetched_at       TIMESTAMP   -- default CURRENT_TIMESTAMP
+```
+
+### Added — `PIXABAY_API_KEY` environment variable
+
+- Added to `backend/.env.example` with a comment pointing at
+  `https://pixabay.com/api/docs/` and documenting the graceful-degradation
+  behaviour when the key is unset.
+- Read at call time via `os.environ.get("PIXABAY_API_KEY")`, not via
+  `core/config.py` — the image service treats a missing key as "feature
+  disabled" rather than "misconfiguration", which means the app still boots
+  cleanly on developer machines without the key.
+- Image cache dir (`backend/data/recipe-covers/`) added to root `.gitignore`
+  so downloaded photos stay local and rebuild organically across machines.
+
+### Notes
+
+- **Stdlib-only networking.** `urllib.request` for both the search call and
+  the image download (4 s and 6 s timeouts respectively). No new pip
+  dependency; the project's `requirements.txt` is untouched.
+- **User-Agent is mandatory on the download path.** Pixabay's image CDN
+  (not the API itself — only the `*.pixabay.com/get/*` hosts) returns
+  HTTP 403 Forbidden to the default `Python-urllib/*` User-Agent. Every
+  download request therefore carries an explicit
+  `User-Agent: TrolleyForTomorrow/1.0 (+https://pixabay.com/api/docs/)`
+  header. Without this every recipe ends up with a persisted
+  known-negative row even though the search itself succeeded — the
+  specific failure mode seen during initial integration testing.
+- **Concurrency.** Flask dev server serialises requests, so a 20-card page
+  load makes 20 sequential Pixabay calls worst-case — well inside the
+  100-req/60-s limit. Under gunicorn with multiple workers, two simultaneous
+  requests for the same recipe could race: both call Pixabay and attempt to
+  write the same file. The file write is effectively idempotent (identical
+  bytes), and the DB insert uses `ON CONFLICT (recipe_id) DO UPDATE` so the
+  race is harmless — worst case is one extra Pixabay call.
+- **Search quality is the irreducible limitation.** Pixabay has stock food
+  photography, not recipe photography. Expect ~30–40 % of recipes to return
+  zero food-category hits (graceful fallback kicks in) and another chunk to
+  return tangentially-related photos. No amount of query cleaning fixes
+  this — it's a corpus mismatch, not a heuristic problem.
+- **Rate-limit failure is transient.** Pixabay 429 responses are caught as
+  "no hit" and — critically — *not* persisted as known-negatives, so a
+  rate-limited window doesn't permanently disable images for the affected
+  recipes. The next request after the 60-s window re-attempts cleanly.
+
+---
+
 ## [1.2.0] — 2026-04-23
 
 ### Added

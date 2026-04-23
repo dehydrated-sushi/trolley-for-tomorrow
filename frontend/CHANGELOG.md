@@ -5,6 +5,32 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.7.0] — 2026-04-23
+
+### Added — Pixabay recipe hero photos (graceful fallback)
+
+**Module:** `frontend/src/modules/meals`
+
+- **`<RecipeHeroImage recipeId={id} />`** overlays every recipe card's hero with a photo fetched from the new backend endpoint `/api/meals/recipe-image/:id`. The image is absolutely positioned over the existing gradient-plus-category-icon layer, so when the request returns 404 (backend has no Pixabay match, or `PIXABAY_API_KEY` isn't set), the component unmounts itself and the gradient hero shows through — no broken-image placeholder, no layout shift.
+- Image fades in over 300 ms on load (`opacity-0` → `opacity-100`) so there's no hard pop when a cached photo arrives.
+- `loading="lazy"` on the `<img>` so off-screen cards don't trigger Pixabay round-trips until they scroll into view — important for the 20-per-page grid so the backend isn't slammed with 20 simultaneous Pixabay calls on first load.
+- Match-score / "No shopping" / "Need N items" badges moved to `z-10` so they remain above both the gradient icon and any loaded photo.
+
+### Added — Pixabay attribution line
+
+**Module:** `frontend/src/modules/meals`
+
+- Muted single-line credit below the recipe grid: *"Recipe photos from Pixabay. Cards without a match fall back to a category-coloured hero."* Required by Pixabay's API TOS ("show your users where the images and videos are from, whenever search results are displayed") and also tells the user *why* some cards have photos and some don't — so missing photos read as a deliberate design choice, not a bug.
+- Only rendered when the grid actually has at least one recipe; empty-state doesn't need the disclaimer.
+
+### Notes
+
+- The frontend now imports `API_BASE` from `src/lib/api.js` so the hero `<img>` can hit the absolute backend URL directly. `apiFetch` stays unchanged; `<img>` can't flow through it because we need the raw URL, not a JSON response.
+- No new dependencies. The whole feature sits on an `<img>` element plus `useState`.
+- If `PIXABAY_API_KEY` is absent in the backend's environment, every `/api/meals/recipe-image/:id` call returns 404 and every card falls back gracefully. The feature is fully optional — nothing breaks when the key isn't there.
+
+---
+
 ## [1.6.1] — 2026-04-23
 
 ### Changed — Meals page sort set rationalised; tag icons + egg icon fixed; legend expanded

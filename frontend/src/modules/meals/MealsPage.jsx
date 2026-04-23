@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { apiFetch } from '../../lib/api'
+import { API_BASE, apiFetch } from '../../lib/api'
 import NutritionLegend from '../../shared/NutritionLegend'
 import { getCategoryInfo } from '../../shared/nutrition'
 import { TAG_STYLES, TAG_STYLE_FALLBACK } from '../../shared/recipeTags'
@@ -95,6 +95,28 @@ function TagPill({ tag, tagInfo, size = 'sm' }) {
   )
 }
 
+/**
+ * Hero-image overlay. Requests the Pixabay-backed photo for this recipe from
+ * the backend. On 404 (Pixabay had no hit, or PIXABAY_API_KEY is unset) the
+ * component renders nothing, letting the underlying gradient + category icon
+ * show through. On successful load the photo fades in over 300 ms.
+ */
+function RecipeHeroImage({ recipeId }) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+  return (
+    <img
+      src={`${API_BASE}/api/meals/recipe-image/${recipeId}`}
+      alt=""
+      loading="lazy"
+      onLoad={() => setLoaded(true)}
+      onError={() => setFailed(true)}
+      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+    />
+  )
+}
+
 function RecipeCard({ meal, tagDefs }) {
   const [expanded, setExpanded] = useState(false)
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false)
@@ -124,18 +146,25 @@ function RecipeCard({ meal, tagDefs }) {
       className="bg-surface-container-lowest rounded-[2rem] overflow-hidden editorial-shadow"
     >
       <div
-        className="relative h-40 overflow-hidden flex items-center justify-center"
+        className="relative h-40 overflow-hidden"
         style={{
           background: `linear-gradient(135deg, ${heroInfo.bg} 0%, ${heroInfo.bg} 55%, ${heroInfo.colour}33 100%)`,
         }}
       >
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: 100, color: heroInfo.colour, opacity: 0.75 }}
-        >
-          {heroInfo.icon}
-        </span>
-        <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
+        {/* Category icon — visible when no Pixabay photo is available */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 100, color: heroInfo.colour, opacity: 0.75 }}
+          >
+            {heroInfo.icon}
+          </span>
+        </div>
+
+        {/* Pixabay photo overlay — fades in on load, hides on 404 */}
+        <RecipeHeroImage recipeId={meal.id} />
+
+        <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5 z-10">
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -746,6 +775,22 @@ export default function MealsPage() {
                   <span className="material-symbols-outlined text-base">chevron_right</span>
                 </button>
               </div>
+            )}
+
+            {/* Pixabay attribution — required by their API TOS whenever photos are displayed */}
+            {recommendations.length > 0 && (
+              <p className="mt-8 text-center text-xs text-on-surface-variant/70">
+                Recipe photos from{' '}
+                <a
+                  href="https://pixabay.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-primary"
+                >
+                  Pixabay
+                </a>
+                . Cards without a match fall back to a category-coloured hero.
+              </p>
             )}
           </section>
         </>

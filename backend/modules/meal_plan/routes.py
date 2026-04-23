@@ -1,7 +1,12 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, abort, jsonify, request, send_from_directory
 from core.database import db
 from sqlalchemy import text
 
+from modules.meal_plan.image_service import (
+    IMAGE_DIR,
+    fetch_and_cache,
+    get_cached_image,
+)
 from modules.nutrition.classifier import classify
 from modules.nutrition.dietary import (
     is_recipe_allowed,
@@ -184,6 +189,35 @@ def _parse_int(raw, default, minimum=1, maximum=None):
 def get_tags():
     """Return the list of available tags + their descriptions (for the filter UI)."""
     return jsonify({"tags": TAG_DEFINITIONS}), 200
+
+
+@bp.route("/recipe-image/<int:recipe_id>", methods=["GET"])
+def get_recipe_image(recipe_id):
+    """Serve a cached Pixabay photo for a recipe.
+
+    404 means "no image" — either Pixabay had no hit (persisted negative) or
+    the cache hasn't been populated and the feature is disabled (no
+    PIXABAY_API_KEY). The frontend treats 404 as "render the gradient +
+    category-icon hero" and never shows a broken-image placeholder.
+    """
+    cached = get_cached_image(recipe_id)
+    if cached is None:
+        row = db.session.execute(
+            text("SELECT name FROM recipes WHERE id = :rid"),
+            {"rid": recipe_id},
+        ).fetchone()
+        if row is None:
+            abort(404)
+        cached = fetch_and_cache(recipe_id, row._mapping["name"])
+        if cached is None:
+            # No API key configured, or cache write failed — no write happened,
+            # so next request will re-attempt. Respond 404 for this one.
+            abort(404)
+
+    filename = cached.get("image_filename")
+    if not filename:
+        abort(404)
+    return send_from_directory(IMAGE_DIR.resolve(), filename)
 
 
 @bp.route("/recommendations", methods=["GET"])

@@ -5,6 +5,45 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.2.0] — 2026-04-23
+
+### Added — Pixabay recipe hero photos
+
+- **`RecipeHeroImage`** component overlays each recipe card's hero with a
+  photo fetched from the new backend `/api/meals/recipe-image/:id` endpoint.
+  Absolutely positioned over the existing gradient + category-icon layer; a
+  300 ms fade-in on successful load, and the component returns `null` on
+  `onError` so a 404 response reveals the gradient hero underneath. No
+  broken-image placeholder, no layout shift.
+- **`loading="lazy"`** on the overlay `<img>` so off-screen cards don't
+  trigger Pixabay round-trips until scrolled into view — keeps the first
+  page load from making 20 synchronous image requests.
+- **Match-score / shopping badges moved to `z-10`** so they remain above
+  both the gradient icon and any loaded photo.
+- **Pixabay attribution line** below the recipe grid — *"Recipe photos from
+  Pixabay. Cards without a match fall back to a category-coloured hero."*
+  Required by Pixabay's API TOS whenever their photos are displayed; also
+  tells the user *why* some cards lack photos so missing photos read as
+  design, not bug.
+- **`API_BASE` import from `src/lib/api.js`** — `apiFetch` returns JSON, but
+  an `<img src>` needs the raw absolute URL, so we bypass the fetch wrapper
+  for this one element.
+
+### Notes
+
+- Zero new npm dependencies. Feature is a `useState` + `<img>` element.
+- When `PIXABAY_API_KEY` is absent in the backend environment every image
+  request 404s and every card falls back to the pre-existing gradient +
+  category-icon hero. The frontend cannot tell the difference between
+  "known-negative" (Pixabay had no hit) and "feature disabled" — and
+  doesn't need to.
+- Pixabay's corpus is stock food photography, not per-recipe photos.
+  Expect ~30–40 % of cards to show the gradient fallback on unusual recipe
+  names (`smurf juice`, heavily-modified dish names, etc.). This is a
+  corpus limitation, not a bug.
+
+---
+
 ## [1.1.1] — 2026-04-23
 
 ### Changed
