@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -8,6 +9,14 @@ load_dotenv()
 
 def _database_uri():
     uri = os.environ["DATABASE_URL"]
+    if uri.startswith("sqlite:///") and not uri.startswith("sqlite:////"):
+        raw_path = uri.removeprefix("sqlite:///")
+        db_path = Path(raw_path)
+        if not db_path.is_absolute():
+            backend_dir = Path(__file__).resolve().parents[1]
+            db_path = backend_dir / db_path
+        return f"sqlite:///{db_path}"
+
     # SQLAlchemy 2.x uses psycopg (v3) by default with the +psycopg driver
     if uri.startswith("postgres://"):
         uri = uri.replace("postgres://", "postgresql+psycopg://", 1)

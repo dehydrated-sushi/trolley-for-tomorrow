@@ -22,6 +22,23 @@ def _ensure_table():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """))
+    if db.engine.dialect.name == "sqlite":
+        budget_cols = {
+            row._mapping["name"]
+            for row in db.session.execute(text("PRAGMA table_info(user_budget)"))
+        }
+    else:
+        budget_cols = {
+            row._mapping["column_name"]
+            for row in db.session.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'user_budget'
+            """))
+        }
+    if "updated_at" not in budget_cols:
+        db.session.execute(text("ALTER TABLE user_budget ADD COLUMN updated_at TIMESTAMP"))
+
     # Dietary preferences: one boolean column per preference, single row.
     cols = ", ".join(f"{p} BOOLEAN DEFAULT FALSE" for p in PREFERENCES)
     db.session.execute(text(f"""
@@ -31,6 +48,57 @@ def _ensure_table():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """))
+    if db.engine.dialect.name == "sqlite":
+        existing_cols = {
+            row._mapping["name"]
+            for row in db.session.execute(text("PRAGMA table_info(user_preferences)"))
+        }
+    else:
+        existing_cols = {
+            row._mapping["column_name"]
+            for row in db.session.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'user_preferences'
+            """))
+        }
+    if "preference_key" in existing_cols:
+        legacy_rows = db.session.execute(text("""
+            SELECT preference_key, preference_value
+            FROM user_preferences
+            WHERE preference_key IS NOT NULL
+        """)).fetchall()
+        migrated_values = {p: False for p in PREFERENCES}
+        for row in legacy_rows:
+            key = row._mapping["preference_key"]
+            if key not in migrated_values:
+                continue
+            value = str(row._mapping["preference_value"] or "").strip().lower()
+            migrated_values[key] = value in ("true", "1", "yes", "on")
+
+        db.session.execute(text("DROP TABLE user_preferences"))
+        db.session.execute(text(f"""
+            CREATE TABLE user_preferences (
+                id INTEGER PRIMARY KEY,
+                {cols},
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        col_list = ", ".join(PREFERENCES)
+        placeholders = ", ".join(f":{p}" for p in PREFERENCES)
+        db.session.execute(text(f"""
+            INSERT INTO user_preferences (id, {col_list}, updated_at)
+            VALUES (1, {placeholders}, CURRENT_TIMESTAMP)
+        """), migrated_values)
+        existing_cols = {"id", *PREFERENCES, "updated_at"}
+
+    for pref in PREFERENCES:
+        if pref not in existing_cols:
+            db.session.execute(
+                text(f"ALTER TABLE user_preferences ADD COLUMN {pref} BOOLEAN DEFAULT FALSE")
+            )
+    if "updated_at" not in existing_cols:
+        db.session.execute(text("ALTER TABLE user_preferences ADD COLUMN updated_at TIMESTAMP"))
     # Favourite recipes. Composite PK keeps it star-toggle-idempotent without
     # needing a separate id column. user_id kept in the schema so the multi-
     # user future is a schema-compatible pivot, not a migration.
@@ -44,6 +112,12 @@ def _ensure_table():
     """))
     db.session.commit()
     _TABLE_INITIALISED = True
+
+
+def _seven_days_ago_sql():
+    if db.engine.dialect.name == "sqlite":
+        return "datetime('now', '-7 days')"
+    return "CURRENT_TIMESTAMP - INTERVAL '7 days'"
 
 
 def _load_preferences():
@@ -97,8 +171,7 @@ def get_budget_status():
             SELECT COALESCE(SUM(price), 0) AS spent
             FROM receipt_items
             WHERE price IS NOT NULL
-              AND created_at >= (CURRENT_TIMESTAMP - INTERVAL '7 days')
-        """)).fetchone()
+              AND created_at >= """ + _seven_days_ago_sql())).fetchone()
         spent = float(spent_row._mapping["spent"]) if spent_row else 0.0
         spent = round(spent, 2)
 
