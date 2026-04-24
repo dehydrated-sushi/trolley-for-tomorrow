@@ -55,13 +55,12 @@ export default function SignupPage() {
             <div className="bg-surface-container-lowest p-8 md:p-10 rounded-[2rem] shadow-sm">
               <div className="mb-8 text-center md:text-left">
                 <h3 className="font-headline text-2xl font-bold text-on-surface">Create your account</h3>
-                <p className="text-on-surface-variant text-sm mt-2">Start your 14-day premium trial today.</p>
               </div>
               <form className="space-y-6">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-on-surface-variant ml-1" htmlFor="name">FULL NAME</label>
                   <div className="relative group">
-                    <input className="w-full bg-surface-container-low border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-on-surface transition-all rounded-t-lg" id="name" placeholder="John Citizen" type="text" />
+                    <input className="w-full bg-surface-container-low border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-on-surface transition-all rounded-t-lg" id="name" placeholder="mother fuck" type="text" />
                     <div className="absolute bottom-0 left-0 h-0.5 w-0 bg-primary transition-all duration-300 group-focus-within:w-full"></div>
                   </div>
                 </div>
@@ -95,20 +94,9 @@ export default function SignupPage() {
                   <span>Register for Trolley for Tomorrow</span>
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </button>
-                <div className="relative py-4">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-surface-container-high"></div></div>
-                  <div className="relative flex justify-center text-xs"><span className="bg-surface-container-lowest px-4 text-on-surface-variant font-medium">OR REGISTER WITH</span></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <button className="flex items-center justify-center gap-2 bg-surface-container-low py-3 rounded-xl hover:bg-surface-container-high transition-colors text-sm font-medium" type="button">
-                    <img alt="Google" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnud-EtSuL_GgFsCrZvJhPx4jS7PAzGCVKjbJT0aTAfumVEaYZBd2SQdeRUMacPRlSjXNMb22xQS3IfSDby-in1a2UFD4J725eMpgJbSnOn4CX29FZQeIFE_1mjmMHLvkNCkwA6UYeG8NE01hP6GJ5Y0pG0cEBrzd-zTfQVHvME3P2zP97hG16jOojh3bJU1ehw2DD55nsLptSIy4V_BTvIo_5y01CZGbWhmLYmwXCb3i4dSVQswFQvnLyuT5g9g-LVIq6sduXJPU" />
-                    <span>Google</span>
-                  </button>
-                  <button className="flex items-center justify-center gap-2 bg-surface-container-low py-3 rounded-xl hover:bg-surface-container-high transition-colors text-sm font-medium" type="button">
-                    <img alt="Apple" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp5vXehjbmbb0KISxnMhXpMXFWuLpuoyw8EGj9viHO2MEis7RlGNCeHVULAMV9l7bWA9M4XkUXYHn0RZYTJlbjSlRobehkNQwSbo4mcFdsPLOQnlVuc6w60vHL86gSZtZD2jeYahfcDlvDU8Ntj1G9ln7PY-l68UWRtcn-aauVnBQCqdeXza4NKbtcBdQV-JLa5ZCCynet11LbZixdst7JIr1Ppo5ge6B2-J0f378DeP1goYTTV1Ub6O-Wj1k7KevxQFNHU8wGIEg" />
-                    <span>Apple</span>
-                  </button>
-                </div>
+                
+                
+
               </form>
               <div className="mt-8 text-center md:hidden">
                 <p className="text-sm text-on-surface-variant">
