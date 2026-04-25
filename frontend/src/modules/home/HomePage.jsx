@@ -86,7 +86,7 @@ export default function HomePage() {
                 Scan your grocery receipts, cook meals from what&apos;s already in your fridge, and keep your weekly budget in check.
               </motion.p>
               <motion.div variants={riseIn} className="flex flex-wrap gap-4">
-                <Link to="/signup" className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                <Link to="/login" className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
                   Start My Larder
                 </Link>
                 <button
