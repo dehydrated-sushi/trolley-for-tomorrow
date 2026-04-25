@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import HeroDemo from './HeroDemo'
-import HowItWorksModal from './HowItWorksModal'
 import PrivacyPolicyModal from '../../shared/PrivacyPolicyModal'
 import MadeByModal from '../../shared/MadeByModal'
 
@@ -48,9 +47,6 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="relative hidden sm:block">
-              <input className="bg-surface-container-low border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-primary transition-all w-64" placeholder="Search recipes..." type="text" />
-            </div>
             <Link to="/profile" className="material-symbols-outlined text-emerald-800 p-2 hover:bg-emerald-100/50 rounded-lg transition-all">account_circle</Link>
           </div>
         </div>
@@ -86,16 +82,9 @@ export default function HomePage() {
                 Scan your grocery receipts, cook meals from what&apos;s already in your fridge, and keep your weekly budget in check.
               </motion.p>
               <motion.div variants={riseIn} className="flex flex-wrap gap-4">
-                <Link to="/signup" className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                <Link to="/login" className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
                   Start My Larder
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => setHowItWorksOpen(true)}
-                  className="px-8 py-4 bg-surface-container-highest/10 backdrop-blur-md border border-surface-variant/20 text-on-primary rounded-full font-bold text-lg hover:bg-surface-container-highest/20 transition-all"
-                >
-                  See How It Works
-                </button>
               </motion.div>
             </motion.div>
             {/* Hero Interactive Demo Card */}
@@ -152,7 +141,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Tall Card */}
             <MotionLink
-              to="/upload-receipt"
+              
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-primary text-on-primary rounded-[2rem] p-10 flex flex-col justify-between block hover:shadow-2xl transition-shadow duration-300"
@@ -183,7 +172,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 1 */}
             <MotionLink
-              to="/profile"
+              
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"
@@ -196,7 +185,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 2 */}
             <MotionLink
-              to="/meals"
+              
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"
@@ -209,7 +198,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 3 */}
             <MotionLink
-              to="/shopping"
+              
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"
@@ -223,27 +212,6 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-24 px-6">
-          <motion.div
-            className="max-w-7xl mx-auto bg-[#0c1f14] rounded-[3rem] p-12 md:p-20 text-center relative overflow-hidden"
-            initial={{ opacity: 0, y: 40, scale: 0.97 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true, amount: 0.2, margin: '-80px' }}
-            transition={{ duration: 0.8, ease: EASE }}
-          >
-            <div className="absolute top-0 right-0 w-96 h-96 bg-primary/20 rounded-full blur-3xl"></div>
-            <div className="relative z-10">
-              <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 leading-tight">Turn your next receipt into dinner.</h2>
-              <p className="text-white/70 text-lg mb-10 max-w-xl mx-auto">
-                Snap a grocery receipt, let us build your virtual fridge, and get recipes from what you already have. Free while we&apos;re in beta.
-              </p>
-              <Link to="/upload-receipt" className="inline-block px-10 py-5 bg-primary-container text-on-primary-container rounded-full font-black text-xl hover:scale-105 active:scale-95 transition-all">
-                Scan my first receipt
-              </Link>
-            </div>
-          </motion.div>
-        </section>
       </main>
 
       {/* Footer */}
@@ -280,10 +248,6 @@ export default function HomePage() {
         </div>
       </footer>
 
-      <HowItWorksModal
-        open={howItWorksOpen}
-        onClose={() => setHowItWorksOpen(false)}
-      />
       <PrivacyPolicyModal
         open={privacyOpen}
         onClose={() => setPrivacyOpen(false)}

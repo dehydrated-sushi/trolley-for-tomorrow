@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import SearchDropdown from './SearchDropdown'
+
 
 const NAV_LINKS = [
   { label: 'Dashboard', to: '/dashboard' },
@@ -35,9 +35,7 @@ export default function TopNav() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div className="hidden sm:block">
-            <SearchDropdown />
-          </div>
+          
           <Link to="/profile" className="p-2 rounded-lg hover:bg-emerald-100/50 transition-all duration-300">
             <span className="material-symbols-outlined text-emerald-800">account_circle</span>
           </Link>

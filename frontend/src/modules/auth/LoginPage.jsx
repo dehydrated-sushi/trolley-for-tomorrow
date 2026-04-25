@@ -1,6 +1,38 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 export default function LoginPage() {
+  const navigate = useNavigate()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    if(!email.trim() || !password.trim()){
+      setError('your email and password error, please check and try again')
+      return
+    }
+    try {
+      setLoading(true)
+      const user = {
+        name: email.split('@')[0],
+        email: email.trim(),
+      }
+      
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('token', 'dev-token')
+      localStorage.setItem('user_profile', Json.stringify(user))
+
+      navigate('/dashboard')
+    } catch (err) {
+      setError('Failed to sign in. Please check your credentials and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
   return (
     <div className="bg-surface text-on-surface min-h-screen flex flex-col">
       <main className="flex-grow flex items-center justify-center p-6">
@@ -39,53 +71,45 @@ export default function LoginPage() {
             <div className="max-w-sm mx-auto w-full">
               <header className="mb-10">
                 <h2 className="font-headline text-3xl font-bold text-on-surface mb-2">Welcome back</h2>
-                <p className="text-on-surface-variant">Enter your credentials to access your pantry.</p>
               </header>
-              <form action="#" className="space-y-6">
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+            
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-on-surface-variant ml-1" htmlFor="email">Email Address</label>
                   <div className="relative">
-                    <input className="w-full px-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary text-on-surface placeholder-on-surface-variant/50 transition-all" id="email" name="email" placeholder="name@example.com" required type="email" />
+                    <input value ={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary text-on-surface placeholder-on-surface-variant/50 transition-all" id="email" name="email" placeholder="name@example.com" required type="email" />
                     <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-outline-variant/30"></div>
                   </div>
                 </div>
+
                 <div className="space-y-1">
                   <div className="flex justify-between items-center px-1">
                     <label className="text-sm font-semibold text-on-surface-variant" htmlFor="password">Password</label>
                     <a className="text-xs font-medium text-primary hover:underline" href="#">Forgot?</a>
                   </div>
+
+                  
                   <div className="relative">
-                    <input className="w-full px-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary text-on-surface placeholder-on-surface-variant/50 transition-all" id="password" name="password" placeholder="••••••••" required type="password" />
+                    <input value ={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary text-on-surface placeholder-on-surface-variant/50 transition-all" id="password" name="password" placeholder="••••••••" required type="password" />
                     <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-outline-variant/30"></div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 px-1">
-                  <input className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" id="remember" name="remember" type="checkbox" />
-                  <label className="text-sm text-on-surface-variant" htmlFor="remember">Keep me signed in</label>
+
+                <div classname="flex items-center justify-center">
+                  {error && (<p classname = "text-sm text-red-600" style={{backgroundColor:"red"}}>{error}</p>)}
                 </div>
+
+
                 <button className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group" type="submit">
-                  <span>Sign In to Your Larder</span>
+                  <span>{loading ? 'Signing in ...':'Sign In to Your Larder'}</span>
                   <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </button>
               </form>
-              <div className="mt-10 relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-outline-variant/20"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase tracking-widest font-bold">
-                  <span className="bg-surface-container-lowest px-4 text-on-surface-variant/40">or continue with</span>
-                </div>
-              </div>
-              <div className="mt-8 grid grid-cols-2 gap-4">
-                <button className="flex items-center justify-center gap-2 py-3 border border-outline-variant/20 rounded-xl hover:bg-surface-container-low transition-all">
-                  <img alt="Google" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsHy00UeqLrLYzMLSY3zq9rtmRgUkLuKfZzBykIbYebiRDdnzYbW-IPBsKBIJSxC0QrVU_pUAuqvWK-ythJG5xY83V3PrYPZWzY5uqHj6rEpPcHsaZcHHKlK_idVgFMXlbFcyMvHAIx2aKX07mjAHiI5E_7CxSAWK5WaHOMHA5pOKdBWYUeEsfI1L5pnA_EpdtiqPIelPo86XmA7SMdqW2fnPro7YPPyDWCbAPDR9aKb0vXoNZk6jqq1r9b8BxwobpIcYf6ktSbCs" />
-                  <span className="text-sm font-medium">Google</span>
-                </button>
-                <button className="flex items-center justify-center gap-2 py-3 border border-outline-variant/20 rounded-xl hover:bg-surface-container-low transition-all">
-                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>smartphone</span>
-                  <span className="text-sm font-medium">Apple</span>
-                </button>
-              </div>
+
+        
+
+            
               <p className="mt-10 text-center text-sm text-on-surface-variant">
                 New to the community?{' '}
                 <Link className="text-primary font-bold hover:underline" to="/signup">Create an account</Link>
