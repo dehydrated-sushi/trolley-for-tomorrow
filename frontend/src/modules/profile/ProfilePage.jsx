@@ -392,6 +392,14 @@ export default function ProfilePage() {
             >
               Save profile
             </button>
+
+            <button
+              type="reset"
+              to="/DevResetButton"
+              className="px-6 py-3 rounded-full bg-emerald-900 text-white font-semibold hover:bg-emerald-800 transition-colors"
+            >
+              reset fridge data
+            </button>
           </div>
         </motion.form>
 
