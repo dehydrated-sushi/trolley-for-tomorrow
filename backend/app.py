@@ -31,20 +31,25 @@ def create_app():
 
     cors_origins = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173"
+        "http://localhost:5173,http://127.0.0.1:5173,https://trolley-for-tomorrow.vercel.app"
     ).split(",")
 
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": cors_origins
+    cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
+
+    CORS(
+        app,
+        resources={
+            r"/api/*": {"origins": cors_origins},
+            r"/health": {"origins": cors_origins},
+            r"/": {"origins": cors_origins},
         },
-        r"/health": {
-            "origins": cors_origins
-        },
-        r"/": {
-            "origins": cors_origins
-        }
-    })
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    )
+
+    print("CORS origins:", cors_origins)
+    print("DATABASE_URL being used:", os.getenv("DATABASE_URL"))
 
     register_error_handlers(app)
     register_jwt_error_handlers()
@@ -92,8 +97,6 @@ def create_app():
 
     return app
 
-
-print("DATABASE_URL being used:", os.getenv("DATABASE_URL"))
 
 app = create_app()
 
