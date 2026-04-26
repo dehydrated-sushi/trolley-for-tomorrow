@@ -15,6 +15,9 @@ from security.rate_limiter import limiter
 from routes.test_routes import test_bp
 from routes.receipt_routes import receipt_bp
 from routes.recipe_routes import recipe_bp
+import os
+from dotenv import load_dotenv
+
 
 
 def create_app():
@@ -83,7 +86,9 @@ def create_app():
 
     return app
 
+load_dotenv()
 
+print("DATABASE_URL being used:", os.getenv("DATABASE_URL"))
 app = create_app()
 
 if __name__ == "__main__":
@@ -93,4 +98,7 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=port,
         debug=os.environ.get("FLASK_ENV") == "development",
+        
+
+
     )
