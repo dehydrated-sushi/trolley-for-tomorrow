@@ -106,7 +106,7 @@ export default function LoginPage() {
                 <p className="text-on-primary text-sm font-medium">Waste Less Food</p>
               </div>
               <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl">
-                <span className="material-symbols-outlined text-primary-fixed mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>savings</span>
+                <span className="material-symbols-outlined text-primary-fixed mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>public</span>
                 <p className="text-on-primary text-sm font-medium">Lower Your Impact</p>
               </div>
             </div>

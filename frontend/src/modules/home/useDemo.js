@@ -24,28 +24,28 @@ export const TAG_LABELS = {
 }
 
 const RECIPES = {
-  'chicken+spinach':        { name: 'Garlic chicken & wilted spinach',   price: '$2.40', tags: ['protein','veg'],            match: 92, expiring: true  },
-  'chicken+rice':           { name: 'Chicken rice bowl with soy glaze',  price: '$3.10', tags: ['protein','grains'],         match: 88                  },
-  'chicken+rice+spinach':   { name: 'One-pan chicken fried rice',        price: '$2.80', tags: ['protein','grains','veg'],   match: 97, expiring: true  },
-  'chicken+garlic+spinach': { name: 'Lemon garlic chicken with spinach', price: '$3.20', tags: ['protein','veg'],            match: 94, expiring: true  },
-  'egg+spinach':            { name: 'Spinach & egg scramble',            price: '$0.90', tags: ['protein','veg'],            match: 95, expiring: true  },
-  'egg+tomato':             { name: 'Shakshuka with tomatoes',           price: '$1.20', tags: ['protein','veg'],            match: 90                  },
-  'egg+avo':                { name: 'Smashed avo & poached egg toast',   price: '$1.80', tags: ['fats','protein'],           match: 85                  },
-  'oat+banana':             { name: 'Banana oat porridge',               price: '$0.60', tags: ['grains','fruit'],           match: 98                  },
-  'oat+milk+banana':        { name: 'Creamy overnight oats',             price: 'FREE',  tags: ['grains','fruit'],           match: 100, expiring: true },
-  'oat+milk':               { name: 'Warm oat milk porridge',            price: '$0.70', tags: ['grains'],                  match: 94, expiring: true  },
-  'pasta+tomato':           { name: 'Simple tomato pasta',               price: '$1.50', tags: ['grains','veg'],             match: 91                  },
-  'pasta+chicken+tomato':   { name: 'Chicken arrabiata pasta',           price: '$3.60', tags: ['protein','grains'],         match: 89                  },
-  'pasta+garlic+tomato':    { name: 'Aglio e olio with tomato',          price: '$1.20', tags: ['grains','veg'],             match: 93                  },
-  'broc+garlic':            { name: 'Garlic-roasted broccoli bowl',      price: '$1.10', tags: ['veg'],                     match: 88                  },
-  'broc+chicken+garlic':    { name: 'Ginger chicken & broccoli stir-fry',price: '$3.40', tags: ['protein','veg'],           match: 95                  },
-  'avo+egg+tomato':         { name: 'Avo, egg & tomato power bowl',      price: '$2.20', tags: ['fats','protein','veg'],     match: 90                  },
+  'chicken+spinach':        { name: 'Garlic chicken & wilted spinach',   cue: 'Use soon',        tags: ['protein','veg'],            match: 92, expiring: true  },
+  'chicken+rice':           { name: 'Chicken rice bowl with soy glaze',  cue: 'Good fit',        tags: ['protein','grains'],         match: 88                  },
+  'chicken+rice+spinach':   { name: 'One-pan chicken fried rice',        cue: 'High ingredient use', tags: ['protein','grains','veg'],   match: 97, expiring: true  },
+  'chicken+garlic+spinach': { name: 'Lemon garlic chicken with spinach', cue: 'Use soon',        tags: ['protein','veg'],            match: 94, expiring: true  },
+  'egg+spinach':            { name: 'Spinach & egg scramble',            cue: 'Quick rescue meal', tags: ['protein','veg'],            match: 95, expiring: true  },
+  'egg+tomato':             { name: 'Shakshuka with tomatoes',           cue: 'Good fit',        tags: ['protein','veg'],            match: 90                  },
+  'egg+avo':                { name: 'Smashed avo & poached egg toast',   cue: 'Small top-up only', tags: ['fats','protein'],           match: 85                  },
+  'oat+banana':             { name: 'Banana oat porridge',               cue: 'Ready to cook',   tags: ['grains','fruit'],           match: 98                  },
+  'oat+milk+banana':        { name: 'Creamy overnight oats',             cue: 'Already on hand', tags: ['grains','fruit'],           match: 100, expiring: true },
+  'oat+milk':               { name: 'Warm oat milk porridge',            cue: 'Use soon',        tags: ['grains'],                  match: 94, expiring: true  },
+  'pasta+tomato':           { name: 'Simple tomato pasta',               cue: 'Pantry-friendly', tags: ['grains','veg'],             match: 91                  },
+  'pasta+chicken+tomato':   { name: 'Chicken arrabiata pasta',           cue: 'High ingredient use', tags: ['protein','grains'],         match: 89                  },
+  'pasta+garlic+tomato':    { name: 'Aglio e olio with tomato',          cue: 'Quick rescue meal', tags: ['grains','veg'],             match: 93                  },
+  'broc+garlic':            { name: 'Garlic-roasted broccoli bowl',      cue: 'Veg-first option', tags: ['veg'],                     match: 88                  },
+  'broc+chicken+garlic':    { name: 'Ginger chicken & broccoli stir-fry', cue: 'Use soon',       tags: ['protein','veg'],           match: 95                  },
+  'avo+egg+tomato':         { name: 'Avo, egg & tomato power bowl',      cue: 'Fresh ingredients first', tags: ['fats','protein','veg'],     match: 90                  },
 }
 
 const FALLBACK = [
-  { name: 'Simple veggie stir-fry', price: '$1.40', tags: ['veg','grains'],    match: 72 },
-  { name: 'Quick egg fried rice',   price: '$1.20', tags: ['protein','grains'], match: 68 },
-  { name: 'Budget grain salad',     price: '$0.90', tags: ['grains','veg'],     match: 65 },
+  { name: 'Simple veggie stir-fry', cue: 'Vegetables first', tags: ['veg','grains'],    match: 72 },
+  { name: 'Quick egg fried rice',   cue: 'Use what is on hand', tags: ['protein','grains'], match: 68 },
+  { name: 'Whole grain salad',      cue: 'Flexible pantry meal', tags: ['grains','veg'],     match: 65 },
 ]
 
 function getCombinations(arr, k) {
