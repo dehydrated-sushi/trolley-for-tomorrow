@@ -39,15 +39,11 @@ export default function HomePage() {
         <div className="flex justify-between items-center px-6 py-3 max-w-7xl mx-auto">
           <div className="flex items-center gap-8">
             <span className="text-xl font-bold text-emerald-900 tracking-tight">Trolley for Tomorrow</span>
-            <div className="hidden md:flex gap-6 items-center">
-              <Link className="text-emerald-700 border-b-2 border-emerald-600 font-semibold px-1 py-1 transition-all duration-300" to="/dashboard">Dashboard</Link>
-              <Link className="text-emerald-600/70 hover:text-emerald-800 transition-all duration-300 px-1 py-1" to="/fridge">Virtual Fridge</Link>
-              <Link className="text-emerald-600/70 hover:text-emerald-800 transition-all duration-300 px-1 py-1" to="/meals">Meal Plans</Link>
-              <Link className="text-emerald-600/70 hover:text-emerald-800 transition-all duration-300 px-1 py-1" to="/shopping">Shopping List</Link>
-            </div>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/profile" className="material-symbols-outlined text-emerald-800 p-2 hover:bg-emerald-100/50 rounded-lg transition-all">account_circle</Link>
+            <Link to="/login" className="px-4 py-2 rounded-full bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors">
+              Log in
+            </Link>
           </div>
         </div>
       </nav>
@@ -121,6 +117,7 @@ export default function HomePage() {
           >
             {/* Large Card */}
             <MotionLink
+              to="/login"
               variants={riseIn}
               whileHover={hoverLift}
               className="md:col-span-2 bg-surface-container rounded-[2rem] overflow-hidden group block hover:shadow-2xl transition-shadow duration-300"
@@ -140,6 +137,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Tall Card */}
             <MotionLink
+              to="/login"
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-primary text-on-primary rounded-[2rem] p-10 flex flex-col justify-between block hover:shadow-2xl transition-shadow duration-300"
@@ -170,6 +168,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 1 */}
             <MotionLink
+              to="/login"
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"
@@ -182,6 +181,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 2 */}
             <MotionLink
+              to="/login"
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"
@@ -194,6 +194,7 @@ export default function HomePage() {
             </MotionLink>
             {/* Small Card 3 */}
             <MotionLink
+              to="/login"
               variants={riseIn}
               whileHover={hoverLift}
               className="bg-surface-container-low rounded-[2rem] p-10 block hover:shadow-xl transition-shadow duration-300"

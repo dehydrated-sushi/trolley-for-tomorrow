@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { clearSession } from '../lib/auth'
 
 const NAV_LINKS = [
   { label: 'Dashboard', to: '/dashboard' },
@@ -39,9 +40,7 @@ export default function NavBar() {
   }, [location.pathname])
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn')
-    localStorage.removeItem('token')
-    localStorage.removeItem('user_profile')
+    clearSession()
     localStorage.removeItem('dashboard_budget')
     localStorage.removeItem('dashboard_expiringSoon')
     localStorage.removeItem('dashboard_mealsPlanned')
@@ -87,7 +86,7 @@ export default function NavBar() {
             {isLoggedIn ? (
               <>
                 <Link
-                  to="/profile"
+                  to="/dashboard"
                   className="text-sm text-white/85 px-4 py-2 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all duration-150"
                 >
                   {userName}
@@ -106,12 +105,6 @@ export default function NavBar() {
                   className="text-sm text-white/65 px-4 py-2 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all duration-150"
                 >
                   Log in
-                </Link>
-                <Link
-                  to="/signup"
-                  className="text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-5 py-2 rounded-full hover:bg-[#8dcca0] transition-all duration-150 hover:-translate-y-px"
-                >
-                  Sign up free
                 </Link>
               </>
             )}
@@ -152,7 +145,7 @@ export default function NavBar() {
             {isLoggedIn ? (
               <>
                 <Link
-                  to="/profile"
+                  to="/dashboard"
                   onClick={() => setMenuOpen(false)}
                   className="flex-1 text-center text-sm text-white/85 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
                 >
@@ -173,13 +166,6 @@ export default function NavBar() {
                   className="flex-1 text-center text-sm text-white/65 px-4 py-2.5 rounded-lg border border-white/14 hover:bg-white/7 hover:text-white transition-all"
                 >
                   Log in
-                </Link>
-                <Link
-                  to="/signup"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex-1 text-center text-sm font-medium text-[#0c1f14] bg-[#5cad76] px-4 py-2.5 rounded-full hover:bg-[#8dcca0] transition-all"
-                >
-                  Sign up free
                 </Link>
               </>
             )}
