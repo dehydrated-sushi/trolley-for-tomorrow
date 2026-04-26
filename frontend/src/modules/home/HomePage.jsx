@@ -66,16 +66,16 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary-fixed border border-primary/30"
               >
                 <span className="material-symbols-outlined text-sm">eco</span>
-                <span className="text-xs font-medium uppercase tracking-widest">Beta · Prototype in development</span>
+                <span className="text-xs font-medium uppercase tracking-widest">Beta · Sustainable living prototype</span>
               </motion.div>
               <motion.h1
                 variants={riseIn}
                 className="text-5xl md:text-7xl font-extrabold text-on-primary leading-[1.1] tracking-tight"
               >
-                Eat well. Spend smart. <span className="text-primary-container">Waste nothing.</span>
+                Use food wisely. <span className="text-primary-container">Waste less.</span>
               </motion.h1>
               <motion.p variants={riseIn} className="text-xl text-surface-variant max-w-lg leading-relaxed">
-                Scan your grocery receipts, cook meals from what&apos;s already in your fridge, and keep your weekly budget in check.
+                Track what you buy, use what you already have, and reduce household food waste through more responsible everyday consumption.
               </motion.p>
               <motion.div variants={riseIn} className="flex flex-wrap gap-4">
                 <Link to="/login" className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
@@ -104,8 +104,8 @@ export default function HomePage() {
             viewport={{ once: true, amount: 0.3, margin: '-80px' }}
             transition={{ duration: 0.7, ease: EASE }}
           >
-            <h2 className="text-4xl font-extrabold text-emerald-900 mb-4 tracking-tight">Designed for Modern Households</h2>
-            <p className="text-emerald-700/70 max-w-2xl text-lg">Intelligent tools that adapt to your pantry, your budget, and your taste. No more spreadsheets, just soulful cooking.</p>
+            <h2 className="text-4xl font-extrabold text-emerald-900 mb-4 tracking-tight">Designed for More Responsible Consumption</h2>
+            <p className="text-emerald-700/70 max-w-2xl text-lg">Practical tools that help households waste less food, buy more intentionally, and build healthier long-term habits for people and planet.</p>
           </motion.div>
           {/* Bento Grid Layout */}
           <motion.div
@@ -128,7 +128,7 @@ export default function HomePage() {
                     <span className="material-symbols-outlined text-primary">kitchen</span>
                   </div>
                   <h3 className="text-3xl font-bold text-emerald-950 mb-4 leading-tight">The Virtual Fridge</h3>
-                  <p className="text-emerald-800/80 leading-relaxed">Stop double-buying. Scan your receipts and our AI instantly categorizes your perishables, tracking expiry dates and suggesting meals before ingredients go to waste.</p>
+                  <p className="text-emerald-800/80 leading-relaxed">See what food is already at home, track what should be used first, and prevent edible ingredients from being forgotten or thrown away.</p>
                 </div>
                 <div className="mt-12 -mx-10 -mb-10">
                   <img className="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" alt="modern minimalist kitchen interior with a organized refrigerator stocked with fresh vegetables and glass containers" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA73jFJbQQAXfc9BWa6Si2pE_Acmn3gXuA79Jh-WYuHzg-jGxfzItyjeic0thNsN89QkUxZ9_AcGfHN8o5R0FmpVHWAEFlCwbx-MxOMTw8uYG8naLOKGJl7wbQCGj4yA1_eQLcba9SGwIXDrloakx9cHVv0RNdN5vkTsEc7tJeMIhNxQtFYKu93YjHI8UgQh-lrPJP8RIbjgSwah-4oM8zh0j2mwzY3BMqUW-xPXT5C8G_h7SWe1LBHmE3m4s_PDIob5-rI6ju-Ayg" />
@@ -147,12 +147,12 @@ export default function HomePage() {
                   <span className="material-symbols-outlined text-white">receipt_long</span>
                 </div>
                 <h3 className="text-2xl font-bold mb-4">Smart Receipt Parsing</h3>
-                <p className="text-white/80 leading-relaxed">Automatically extract item prices and quantities from any Australian supermarket receipt. Watch your savings grow in real-time.</p>
+                <p className="text-white/80 leading-relaxed">Turn shopping receipts into usable food records so the system can spot risk earlier and help households act before food becomes waste.</p>
               </div>
               <div className="mt-12 bg-white/10 p-6 rounded-2xl border border-white/20">
                 <div className="flex justify-between text-sm mb-2">
-                  <span>Weekly Target</span>
-                  <span>$120.00</span>
+                  <span>Waste reduction goal</span>
+                  <span>75%</span>
                 </div>
                 <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
                   <motion.div
@@ -163,7 +163,7 @@ export default function HomePage() {
                     transition={{ duration: 1.1, ease: EASE, delay: 0.25 }}
                   />
                 </div>
-                <p className="text-[10px] mt-4 opacity-60">75% OF BUDGET USED</p>
+                <p className="text-[10px] mt-4 opacity-60">TRACKING PROGRESS TOWARD LOWER WASTE</p>
               </div>
             </MotionLink>
             {/* Small Card 1 */}
@@ -176,8 +176,8 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mb-6 shadow-sm">
                 <span className="material-symbols-outlined text-tertiary">savings</span>
               </div>
-              <h3 className="text-xl font-bold text-emerald-950 mb-3">Budget Benchmarks</h3>
-              <p className="text-emerald-800/70 text-sm leading-relaxed">Compare your grocery spend against similar Australian households to find hidden savings.</p>
+              <h3 className="text-xl font-bold text-emerald-950 mb-3">Impact Insights</h3>
+              <p className="text-emerald-800/70 text-sm leading-relaxed">Understand which habits create the most waste so you can make lower-impact choices next time.</p>
             </MotionLink>
             {/* Small Card 2 */}
             <MotionLink
@@ -189,8 +189,8 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mb-6 shadow-sm">
                 <span className="material-symbols-outlined text-primary">restaurant_menu</span>
               </div>
-              <h3 className="text-xl font-bold text-emerald-950 mb-3">Meal Planning</h3>
-              <p className="text-emerald-800/70 text-sm leading-relaxed">Generate 7-day meal plans based strictly on what's already in your pantry and fridge.</p>
+              <h3 className="text-xl font-bold text-emerald-950 mb-3">Use-It-Up Meals</h3>
+              <p className="text-emerald-800/70 text-sm leading-relaxed">Get meal ideas that help consume ingredients already at home before they expire.</p>
             </MotionLink>
             {/* Small Card 3 */}
             <MotionLink
@@ -202,8 +202,8 @@ export default function HomePage() {
               <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mb-6 shadow-sm">
                 <span className="material-symbols-outlined text-primary">group</span>
               </div>
-              <h3 className="text-xl font-bold text-emerald-950 mb-3">Community Insights</h3>
-              <p className="text-emerald-800/70 text-sm leading-relaxed">Share tips on local specials and bulk-buy opportunities with your neighborhood.</p>
+              <h3 className="text-xl font-bold text-emerald-950 mb-3">Responsible Habits</h3>
+              <p className="text-emerald-800/70 text-sm leading-relaxed">Build simple routines around storing, checking, and using food more responsibly each week.</p>
             </MotionLink>
           </motion.div>
         </section>
