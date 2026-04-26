@@ -941,7 +941,7 @@ export default function MealsPage() {
                     {prefLabels[pref] || pref}
                   </span>
                 ))}
-                <Link to="/profile" className="text-primary font-semibold hover:underline ml-1">
+                <Link to="/dashboard" className="text-primary font-semibold hover:underline ml-1">
                   Edit
                 </Link>
               </span>
@@ -1043,7 +1043,7 @@ export default function MealsPage() {
                       </button>
                     )}
                     {activePrefs.length > 0 && (
-                      <Link to="/profile" className="text-xs text-primary font-semibold hover:underline">
+                      <Link to="/dashboard" className="text-xs text-primary font-semibold hover:underline">
                         Edit preferences
                       </Link>
                     )}

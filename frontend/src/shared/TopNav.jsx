@@ -1,5 +1,5 @@
-import { Link, useLocation } from 'react-router-dom'
-
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { clearSession, isAuthenticated } from '../lib/auth'
 
 const NAV_LINKS = [
   { label: 'Dashboard', to: '/dashboard' },
@@ -10,6 +10,17 @@ const NAV_LINKS = [
 
 export default function TopNav() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const loggedIn = isAuthenticated()
+
+  if (!loggedIn) {
+    return null
+  }
+
+  function handleLogout() {
+    clearSession()
+    navigate('/login')
+  }
 
   return (
     <nav className="fixed top-0 w-full z-50 glass-nav shadow-sm">
@@ -35,10 +46,16 @@ export default function TopNav() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          
-          <Link to="/profile" className="p-2 rounded-lg hover:bg-emerald-100/50 transition-all duration-300">
+          <Link to="/dashboard" className="p-2 rounded-lg hover:bg-emerald-100/50 transition-all duration-300">
             <span className="material-symbols-outlined text-emerald-800">account_circle</span>
           </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-full bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors"
+          >
+            Log out
+          </button>
         </div>
       </div>
     </nav>

@@ -264,7 +264,7 @@ export default function DashboardPage() {
                 </p>
               </div>
               <Link
-                to="/profile"
+                to="/dashboard"
                 className="flex-shrink-0 px-5 py-2 rounded-full bg-surface-container-high text-primary text-sm font-semibold hover:bg-surface-container-highest transition-colors"
               >
                 Adjust budget
@@ -366,7 +366,7 @@ export default function DashboardPage() {
           whileTap={{ scale: 0.98 }}
         >
           <Link
-            to="/profile"
+            to="/dashboard"
             className={`p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow group block h-full ${
               overBudget
                 ? 'bg-error-container/20 border border-error/20'

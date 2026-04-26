@@ -122,6 +122,12 @@ def get_shopping_list():
 _DEMO_USER_ID = 1
 
 
+def _seven_days_ago_sql():
+    if db.engine.dialect.name == "sqlite":
+        return "datetime('now', '-7 days')"
+    return "CURRENT_TIMESTAMP - INTERVAL '7 days'"
+
+
 def _fridge_match_items():
     """Set of normalised fridge-item names that are valid as recipe-matching
     anchors. Shared across rail helpers. Empty set is valid."""
@@ -149,7 +155,7 @@ def _rail_staples(limit=6):
         WHERE name IS NOT NULL AND TRIM(name) != ''
         GROUP BY LOWER(TRIM(name))
         HAVING COUNT(*) >= 2
-           AND MAX(created_at) < (CURRENT_TIMESTAMP - INTERVAL '7 days')
+           AND MAX(created_at) < """ + _seven_days_ago_sql() + """
         ORDER BY COUNT(*) DESC, MAX(created_at) ASC
         LIMIT :lim
     """), {"lim": limit}).fetchall()

@@ -263,7 +263,7 @@ def search_recipes():
                 ELSE 2
             END AS match_rank
         FROM recipes
-        WHERE name ILIKE :any
+        WHERE LOWER(name) LIKE LOWER(:any)
         ORDER BY match_rank ASC, LOWER(name) ASC
         LIMIT :lim
     """), {"any": like_any, "prefix": like_prefix, "lim": limit}).fetchall()
