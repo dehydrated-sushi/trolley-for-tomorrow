@@ -16,7 +16,7 @@ from routes.test_routes import test_bp
 from routes.receipt_routes import receipt_bp
 from routes.recipe_routes import recipe_bp
 import os
-from dotenv import load_dotenv
+
 
 
 
@@ -86,9 +86,7 @@ def create_app():
 
     return app
 
-load_dotenv()
 
-print("DATABASE_URL being used:", os.getenv("DATABASE_URL"))
 app = create_app()
 
 if __name__ == "__main__":
