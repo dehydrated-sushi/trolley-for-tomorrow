@@ -70,73 +70,85 @@ export default function PrivacyPolicyModal({ open, onClose }) {
             {/* Scrollable body */}
             <div className="overflow-y-auto px-8 md:px-12 py-7 text-slate-700 leading-relaxed space-y-5 text-[15px]">
               <p>
-                Trolley for Tomorrow is a student project built at Monash University as part of FIT5120 Industry Experience Studio. This page explains what data the app collects, how we use it, and what we don&apos;t do with it.
+                Trolley for Tomorrow is a student project built at Monash University as part of FIT5120 Industry Experience Studio. This page explains what data this prototype may store, why it is used, and how that supports our goal of helping households reduce food waste and make more responsible consumption choices.
               </p>
 
               <Section title="Who we are">
                 <p>
-                  Trolley for Tomorrow is a prototype built by a team of Monash University students. It is not a commercial product. It is not backed by a company. We built it to learn, and to explore whether a practical digital tool can help Australian households plan affordable meals under budget pressure.
+                  Trolley for Tomorrow is a prototype built by a team of Monash University students. It is not a commercial product and it is not operated by a company. We built it to explore whether a practical digital tool can help households track food at home, use ingredients before they are wasted, and build more sustainable kitchen habits.
                 </p>
               </Section>
 
               <Section title="What we collect">
-                <p>When you use the app, we store the following in our database:</p>
+                <p>Depending on which parts of the prototype you use, the app may store the following information:</p>
                 <ul className="list-disc pl-6 space-y-2 mt-3">
                   <li>
-                    <strong className="text-slate-900">Grocery receipt data.</strong>{' '}
-                    If you upload a photo of a grocery receipt, we save the image on our server and run it through text recognition software to extract item names, quantities, and prices. Both the image and the extracted text are stored against your account.
+                    <strong className="text-slate-900">Receipt and food logging data.</strong>{' '}
+                    If you upload a receipt or manually add food items, the app may store item names, quantities, categories, and related metadata so it can help track what food has come into the home.
                   </li>
                   <li>
-                    <strong className="text-slate-900">Items in your virtual fridge.</strong>{' '}
-                    These come from your uploaded receipts, or from any items you add manually.
+                    <strong className="text-slate-900">Virtual fridge data.</strong>{' '}
+                    This includes the items you keep in your in-app fridge, along with details that help the system surface what should be used first.
                   </li>
                   <li>
-                    <strong className="text-slate-900">Your weekly food budget.</strong>{' '}
-                    The number you enter on the profile page. Nothing more.
+                    <strong className="text-slate-900">Preference data.</strong>{' '}
+                    This can include household settings, dietary preferences, reminder choices, and other low-waste planning preferences you choose to save.
                   </li>
                   <li>
-                    <strong className="text-slate-900">Your dietary preferences.</strong>{' '}
-                    The toggles you set (vegetarian, gluten-free, and so on). Stored as true or false values.
+                    <strong className="text-slate-900">Local profile details stored in your browser.</strong>{' '}
+                    Some prototype features, such as your display name, uploaded avatar, and local sign-in state, are currently stored in browser storage on the device you are using.
                   </li>
                 </ul>
                 <p className="mt-4">
-                  That is the full list. We do not collect your name, email, phone number, address, or payment details. The current version of the app does not have user accounts, so everything you enter is stored against a single shared test record.
+                  We do not intentionally collect payment details, government identifiers, or precise location data. Because this is a prototype, some experiences may rely on local browser storage or shared demo records rather than full production-style user accounts.
                 </p>
               </Section>
 
               <Section title="What we do not collect">
                 <p>
-                  We do not use cookies for tracking. We do not use Google Analytics or any similar analytics service. We do not have advertising. We do not sell or share any of your data, because we do not have any data worth selling.
+                  We do not use this project to advertise to you. We do not sell personal data. We do not use the app to build marketing profiles about users. We also do not intentionally collect more information than is needed to demonstrate the prototype&apos;s food-waste-reduction features.
                 </p>
               </Section>
 
-              <Section title="Where your data goes">
+              <Section title="How we use the data">
                 <p>
-                  Your data is stored in a PostgreSQL database hosted by Amazon Web Services, located in Australia. The app itself runs on Microsoft Azure. We do not send your data anywhere else. We do not share it with Coles, Woolworths, Foodbank, or any other organisation mentioned elsewhere in the app.
+                  The data in this prototype is used to power features such as receipt parsing, fridge tracking, meal suggestions, shopping guidance, and low-waste habit support. In other words, the data is used to help the app show what food is already available, what should be used soon, and what actions may reduce unnecessary waste.
+                </p>
+              </Section>
+
+              <Section title="Where data may be stored">
+                <p>
+                  Because this project is still in development, data may be stored in browser storage on your device, in local development databases, or in cloud services configured by the team for testing. Storage arrangements may change as the prototype evolves.
                 </p>
               </Section>
 
               <Section title="How long we keep it">
                 <p>
-                  This is a student project in active development. The database may be cleared at any time, for any reason, without notice. If you rely on the data you have entered, keep your own copy.
+                  This is a student prototype in active development. Demo data, uploaded content, and testing records may be deleted, reset, or replaced at any time. If something matters to you, do not rely on the app as the only place where that information exists.
                 </p>
               </Section>
 
-              <Section title="Your rights">
+              <Section title="Your choices">
                 <p>
-                  Because we do not collect identifying information and the app runs as a single shared account, we cannot attach any individual piece of data to an individual person. If you want us to wipe the shared database, email the project team and we will do it.
+                  You can choose not to upload receipts, not to add a profile photo, and not to save optional profile information. You can also clear locally stored prototype data from your browser by signing out or clearing browser storage on the device you use.
+                </p>
+              </Section>
+
+              <Section title="Limits of the prototype">
+                <p>
+                  Trolley for Tomorrow is an educational prototype, not a production-ready service. Some features may use simplified data models, shared demo records, or browser-only storage. As a result, privacy, deletion, and account-management behaviour may not yet match the standards of a full consumer product.
                 </p>
               </Section>
 
               <Section title="Changes to this policy">
                 <p>
-                  As the app develops, we may add features like user accounts, supermarket pricing data, or location-based suggestions. When any of those go live, this page will be updated to explain what new data is collected and why.
+                  As the prototype develops, we may change what features exist and what data they need. If those changes affect privacy in a meaningful way, this page should be updated to reflect the new behaviour.
                 </p>
               </Section>
 
               <Section title="Contact">
                 <p>
-                  This is a Monash University coursework project. If you have questions or concerns about your data, contact us through the feedback link in the footer, or through the FIT5120 course coordinator.
+                  This is a Monash University coursework project. If you have questions or concerns, contact the team through the feedback link in the footer or through the course context in which the project is being developed.
                 </p>
               </Section>
             </div>
