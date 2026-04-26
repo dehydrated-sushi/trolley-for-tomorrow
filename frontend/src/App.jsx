@@ -6,6 +6,7 @@ import LoginPage from './modules/auth/LoginPage'
 import DashboardPage from './modules/dashboard/DashboardPage'
 import FridgeView from './modules/fridge/FridgeView'
 import MealsPage from './modules/meals/MealsPage'
+import ProfilePage from './modules/profile/ProfilePage'
 import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
 import NotFoundPage from './modules/system/NotFoundPage'
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/fridge" element={<FridgeView />} />
             <Route path="/meals" element={<MealsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/shopping" element={<ShoppingListPage />} />
             <Route path="/upload-receipt" element={<UploadReceiptPage />} />
           </Route>
