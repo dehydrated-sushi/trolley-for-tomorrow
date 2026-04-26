@@ -2,9 +2,12 @@ import importlib
 import os
 import pkgutil
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
+
+load_dotenv()
 
 from core.auth import jwt
 from core.config import Config
@@ -15,49 +18,52 @@ from security.rate_limiter import limiter
 from routes.test_routes import test_bp
 from routes.receipt_routes import receipt_bp
 from routes.recipe_routes import recipe_bp
-import os
-
-
 
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Initialise extensions
     db.init_app(app)
     jwt.init_app(app)
     limiter.init_app(app)
     Bcrypt(app)
-    
-    CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-        ]
-    }
-})
 
-    # Register error handlers
+    cors_origins = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": cors_origins
+        },
+        r"/health": {
+            "origins": cors_origins
+        },
+        r"/": {
+            "origins": cors_origins
+        }
+    })
+
     register_error_handlers(app)
     register_jwt_error_handlers()
 
-    # Register blueprints
     app.register_blueprint(test_bp)
     app.register_blueprint(receipt_bp, url_prefix="/api/receipts")
     app.register_blueprint(recipe_bp)
 
-    # Auto-discover and register module blueprints
     modules_dir = os.path.join(os.path.dirname(__file__), "modules")
-    for module_info in pkgutil.iter_modules([modules_dir]):
-        module = importlib.import_module(f"modules.{module_info.name}.routes")
-        if hasattr(module, "bp"):
-            app.register_blueprint(module.bp)
 
-    # Basic routes
+    if os.path.isdir(modules_dir):
+        for module_info in pkgutil.iter_modules([modules_dir]):
+            try:
+                module = importlib.import_module(f"modules.{module_info.name}.routes")
+                if hasattr(module, "bp"):
+                    app.register_blueprint(module.bp)
+            except ModuleNotFoundError:
+                print(f"Skipping module without routes: {module_info.name}")
+
     @app.route("/", methods=["GET"])
     def home():
         return jsonify({
@@ -87,16 +93,14 @@ def create_app():
     return app
 
 
+print("DATABASE_URL being used:", os.getenv("DATABASE_URL"))
+
 app = create_app()
 
 if __name__ == "__main__":
-    # Port 5000 on macOS is grabbed by AirPlay Receiver by default, so we use 5001.
     port = int(os.environ.get("PORT", 5001))
     app.run(
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=port,
         debug=os.environ.get("FLASK_ENV") == "development",
-        
-
-
     )
