@@ -14,6 +14,7 @@ from modules.nutrition.dietary import (
     PREFERENCES,
 )
 from modules.profile.routes import _active_preferences
+from modules.receipt.service import ensure_receipt_session_schema
 
 bp = Blueprint("meal_plan_bp", __name__, url_prefix="/api/meals")
 
@@ -22,6 +23,12 @@ SKIP_ITEMS = frozenset({
 })
 
 MIN_ITEM_LENGTH = 3
+
+MATCH_STOPWORDS = frozenset({
+    "and", "the", "with", "fresh", "organic", "australian", "australia",
+    "woolworths", "coles", "aldi", "ww", "rspca", "brand", "pack", "packs",
+    "each", "large", "small", "medium", "price", "promotional",
+})
 
 # Minimum share of recipe ingredients that must be in the user's fridge
 # before the recipe appears in recommendations. Stops the list from
@@ -152,15 +159,52 @@ def word_match(needle, haystack):
     return False
 
 
+def _tokens(value):
+    return [
+        token
+        for token in "".join(ch if ch.isalnum() else " " for ch in normalize(value)).split()
+        if len(token) >= MIN_ITEM_LENGTH and token not in MATCH_STOPWORDS
+    ]
+
+
+def _match_candidates(item):
+    """Build precise searchable terms from a fridge item.
+
+    Receipt names often include brands and pack words. The OCR flow stores the
+    real product name for display and `matched_name` for recipe logic; this
+    helper is the fallback for older/manual rows without a matched name.
+    """
+    toks = _tokens(item)
+    candidates = {item}
+    candidates.update(toks)
+    candidates.update(
+        f"{toks[i]} {toks[i + 1]}"
+        for i in range(len(toks) - 1)
+    )
+    return {
+        c for c in candidates
+        if len(c) >= MIN_ITEM_LENGTH and c not in SKIP_ITEMS
+    }
+
+
 def find_matching_item(recipe_ingredient, available_set):
     """Return the fridge-item name that matches, or None."""
     ri = recipe_ingredient.strip().lower()
     if not ri:
         return None
+    ri_tokens = set(_tokens(ri))
     for item in available_set:
         if ri == item:
             return item
         if word_match(item, ri) or word_match(ri, item):
+            return item
+        item_tokens = set(_tokens(item))
+        if not ri_tokens or not item_tokens:
+            continue
+        overlap = ri_tokens & item_tokens
+        if len(overlap) >= 2:
+            return item
+        if len(ri_tokens) == 1 and ri_tokens <= item_tokens:
             return item
     return None
 
@@ -314,6 +358,7 @@ def get_recipe_image(recipe_id):
 @bp.route("/recommendations", methods=["GET"])
 def get_meal_recommendations():
     try:
+        ensure_receipt_session_schema()
         # ---- query params ----
         raw_max = request.args.get("max_cost")
         max_cost = None
@@ -346,16 +391,19 @@ def get_meal_recommendations():
 
         # ---- fridge items + price lookup ----
         rows = db.session.execute(text("""
-            SELECT LOWER(TRIM(name)) AS name, AVG(price) AS avg_price
+            SELECT
+                LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name))) AS match_name,
+                AVG(price) AS avg_price
             FROM receipt_items
-            WHERE name IS NOT NULL AND TRIM(name) != ''
-            GROUP BY LOWER(TRIM(name))
+            WHERE COALESCE(NULLIF(matched_name, ''), name) IS NOT NULL
+              AND TRIM(COALESCE(NULLIF(matched_name, ''), name)) != ''
+            GROUP BY LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name)))
         """)).fetchall()
 
         all_items = set()
         price_map = {}
         for r in rows:
-            name = r._mapping["name"]
+            name = r._mapping["match_name"]
             all_items.add(name)
             ap = r._mapping["avg_price"]
             if ap is not None:
@@ -396,11 +444,16 @@ def get_meal_recommendations():
             return jsonify(base_response), 200
 
         # ---- SQL pre-filter: recipes that mention at least one fridge item ----
+        search_terms = sorted({
+            candidate
+            for item in match_items
+            for candidate in _match_candidates(item)
+        })
         like_clauses = []
         params = {}
-        for i, item in enumerate(match_items):
+        for i, item in enumerate(search_terms):
             p = f"i{i}"
-            like_clauses.append(f"ingredients_clean LIKE :{p}")
+            like_clauses.append(f"LOWER(ingredients_clean) LIKE :{p}")
             params[p] = f"%{item}%"
         where_sql = " OR ".join(like_clauses)
 
