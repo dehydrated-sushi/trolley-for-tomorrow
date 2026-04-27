@@ -409,26 +409,7 @@ export default function ProfilePage() {
           transition={{ duration: 0.45, delay: 0.14, ease: EASE }}
           className="space-y-6"
         >
-          <div className="bg-white rounded-[2rem] border border-emerald-100 shadow-sm p-6">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/60 font-bold mb-2">
-              Snapshot
-            </p>
-            <h3 className="text-2xl font-extrabold text-emerald-950 mb-5">What this profile is set up for</h3>
-            <div className="space-y-3">
-              {impactCards.map((card) => (
-                <div
-                  key={card.title}
-                  className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-4 flex items-start gap-3"
-                >
-                  <span className="material-symbols-outlined text-emerald-700 mt-0.5">{card.icon}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-950">{card.title}</p>
-                    <p className="text-sm text-emerald-800/75 mt-1">{card.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          
 
           <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 rounded-[2rem] text-white p-6 shadow-xl">
             <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300 font-bold mb-2">
