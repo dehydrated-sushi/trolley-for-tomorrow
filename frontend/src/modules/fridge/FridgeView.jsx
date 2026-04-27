@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,14 +8,6 @@ import { toast } from '../../shared/toastBus'
 import { CATEGORY_FALLBACK, getCategoryInfo } from '../../shared/nutrition'
 import ManualAddModal from './ManualAddModal'
 import ARScanModal from './ARScanModal'
-=======
-import { useFridge, NUTRITION_CATEGORIES } from './useFridge'
-import IngredientList from './IngredientList'
-import IngredientForm from './IngredientForm'
-import CookingMethodPanel from './CookingMethodPanel'
-import ConfirmDialog from '../../shared/ConfirmDialog'
-import { Link } from 'react-router-dom'
->>>>>>> fe668f77bd0b70f3c3f439c3929739e64c8c039c
 
 const EASE = [0.22, 1, 0.36, 1]
 const UNDO_MS = 4000
@@ -215,7 +206,6 @@ export default function FridgeView() {
     toast.show({ message: `Added ${item.name} to your fridge` })
   }
 
-<<<<<<< HEAD
   const handleUpdated = (item) => {
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...item } : i)))
     toast.show({ message: `Updated ${item.name}` })
@@ -283,39 +273,6 @@ export default function FridgeView() {
             transition={{ type: 'spring', stiffness: 420, damping: 22 }}
             className="group relative inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-xl bg-white border border-cyan-200 shadow-[0_2px_12px_-4px_rgba(34,211,238,0.28)] text-on-surface font-bold text-sm hover:border-cyan-300 transition-colors"
             title="Preview — AR fridge scanning, shipping in iteration 2"
-=======
-        {/* ── Page header ── */}
-        <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
-          <div>
-            <div className="text-xs font-medium tracking-[1.2px] uppercase text-[#5a7a68] mb-1">
-              Virtual Fridge
-            </div>
-            <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#0c1f14] tracking-tight">
-              My Fridge
-            </h1>
-            <p className="text-sm text-[#5a7a68] mt-1">
-              {allIngredients.length} items
-              {expiringCount > 0 && (
-                <span className="ml-2 text-amber-600 font-medium">
-                  · {expiringCount} expiring soon
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-  <Link
-    to="/scan"
-    className="inline-flex items-center gap-2 bg-white border border-[#cce4d6] text-[#2d4a38] text-sm font-medium px-4 py-2.5 rounded-full hover:border-[#5cad76] hover:bg-[#f4fbf6] transition-all duration-150"
-  >
-    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" />
-    </svg>
-    Scan receipt
-  </Link>
-          <button
-            onClick={() => setEditingItem({})}
-            className="inline-flex items-center gap-2 bg-[#1e3d2a] text-white text-sm font-medium px-5 py-2.5 rounded-full hover:bg-[#2d5a3d] hover:-translate-y-px transition-all duration-150"
->>>>>>> fe668f77bd0b70f3c3f439c3929739e64c8c039c
           >
             <span
               className="inline-flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0"
@@ -350,11 +307,7 @@ export default function FridgeView() {
             Upload receipt
           </Link>
         </div>
-<<<<<<< HEAD
       </header>
-=======
-        </div>
->>>>>>> fe668f77bd0b70f3c3f439c3929739e64c8c039c
 
       {error && (
         <div className="mb-8 p-4 rounded-2xl bg-error-container/30 text-error text-sm font-medium">
