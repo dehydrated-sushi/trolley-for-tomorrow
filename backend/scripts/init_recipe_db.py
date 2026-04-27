@@ -48,8 +48,28 @@ CREATE TABLE IF NOT EXISTS known_ingredients (
 """)
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER DEFAULT 1,
+    original_filename TEXT NOT NULL,
+    stored_file_path TEXT,
+    scan_source TEXT DEFAULT 'upload',
+    store_name TEXT,
+    purchase_date TEXT,
+    scan_status TEXT DEFAULT 'uploaded',
+    raw_ocr_text TEXT,
+    parser_version TEXT,
+    item_count INTEGER DEFAULT 0,
+    total_amount REAL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)
+""")
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS receipt_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    receipt_id INTEGER,
     receipt_filename TEXT,
     receipt_path TEXT,
     name TEXT NOT NULL,
@@ -57,6 +77,18 @@ CREATE TABLE IF NOT EXISTS receipt_items (
     price REAL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
+""")
+
+receipt_item_columns = {
+    row[1] for row in cursor.execute("PRAGMA table_info(receipt_items)").fetchall()
+}
+
+if "receipt_id" not in receipt_item_columns:
+    cursor.execute("ALTER TABLE receipt_items ADD COLUMN receipt_id INTEGER")
+
+cursor.execute("""
+CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id
+ON receipt_items (receipt_id)
 """)
 
 cursor.execute("""
@@ -150,6 +182,7 @@ print("Known ingredients:", len(known_df))
 print("Tables created:")
 print("- recipes")
 print("- known_ingredients")
+print("- receipts")
 print("- receipt_items")
 print("- fridge_items")
 print("- user_preferences")

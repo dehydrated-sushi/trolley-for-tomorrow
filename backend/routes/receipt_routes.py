@@ -1,9 +1,11 @@
 """Receipt ingestion — two-step flow:
 
 1. POST /api/receipts/parse   — runs OCR on the uploaded image, returns a
-                                 draft list of items. DOES NOT save to DB.
+                                 receipt session + draft list of items. Does
+                                 not save item rows yet.
 2. POST /api/receipts/commit  — takes a user-confirmed list of items
-                                 (possibly edited) and persists them.
+                                 (possibly edited) and persists them against
+                                 the receipt session.
 
 This split lets the frontend show an editable draft table between upload
 and save, so users can correct OCR mistakes, remove bogus rows, or add
@@ -13,8 +15,15 @@ from flask import Blueprint, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 
+from core.database import db
 from modules.receipt.ocr import process_receipt
-from modules.receipt.service import save_receipt_items
+from modules.receipt.schema import Receipt, ReceiptItem
+from modules.receipt.service import (
+    create_receipt_session,
+    ensure_receipt_session_schema,
+    save_receipt_items,
+    update_receipt_session,
+)
 
 receipt_bp = Blueprint("receipt_bp", __name__)
 
@@ -49,10 +58,90 @@ def _normalise_item(raw):
     return {"name": name, "qty": qty, "price": price}
 
 
+def _total_amount(items):
+    total = 0.0
+    has_price = False
+    for item in items:
+        price = item.get("price")
+        if price in (None, ""):
+            continue
+        try:
+            total += float(price)
+            has_price = True
+        except (TypeError, ValueError):
+            continue
+    return round(total, 2) if has_price else None
+
+
+def _receipt_summary(receipt):
+    return {
+        "id": receipt.id,
+        "original_filename": receipt.original_filename,
+        "scan_source": receipt.scan_source,
+        "scan_status": receipt.scan_status,
+        "item_count": receipt.item_count,
+        "total_amount": receipt.total_amount,
+        "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+        "updated_at": receipt.updated_at.isoformat() if receipt.updated_at else None,
+    }
+
+
+@receipt_bp.route("/sessions", methods=["GET"])
+def list_receipt_sessions():
+    """Return recent receipt scan sessions for the frontend history panel."""
+    try:
+        ensure_receipt_session_schema()
+        limit = request.args.get("limit", 50, type=int)
+        limit = max(1, min(limit, 200))
+
+        receipts = (
+            Receipt.query
+            .order_by(Receipt.created_at.desc(), Receipt.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return jsonify({
+            "sessions": [_receipt_summary(receipt) for receipt in receipts],
+            "count": len(receipts),
+        }), 200
+    except Exception as e:
+        print("LIST RECEIPT SESSIONS ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@receipt_bp.route("/sessions/<int:receipt_id>", methods=["GET"])
+def get_receipt_session(receipt_id):
+    """Return one receipt session and the items bought in that scan."""
+    try:
+        ensure_receipt_session_schema()
+
+        receipt = db.session.get(Receipt, receipt_id)
+        if receipt is None:
+            return jsonify({"error": "Receipt session not found"}), 404
+
+        items = (
+            ReceiptItem.query
+            .filter(ReceiptItem.receipt_id == receipt_id)
+            .order_by(ReceiptItem.id.asc())
+            .all()
+        )
+
+        return jsonify({
+            "session": _receipt_summary(receipt),
+            "items": [item.to_dict() for item in items],
+            "count": len(items),
+        }), 200
+    except Exception as e:
+        print("GET RECEIPT SESSION ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+
 @receipt_bp.route("/parse", methods=["POST"])
 def parse_receipt():
     """Run OCR on the uploaded image. Returns the parsed items as a draft
-    for the user to review/edit. Does not save anything."""
+    for the user to review/edit. Saves a receipt-session row so every scan
+    attempt is traceable, but does not save receipt item rows yet."""
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
 
@@ -65,6 +154,13 @@ def parse_receipt():
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
+    receipt = create_receipt_session(
+        receipt_filename=filename,
+        receipt_path=filepath,
+        scan_source="upload",
+        scan_status="uploaded",
+    )
+
     try:
         raw_items = process_receipt(filepath)
 
@@ -75,7 +171,16 @@ def parse_receipt():
             if clean:
                 items.append(clean)
 
+        update_receipt_session(
+            receipt.id,
+            scan_status="parsed",
+            item_count=len(items),
+            total_amount=_total_amount(items),
+        )
+
         return jsonify({
+            "receipt_id": receipt.id,
+            "scan_status": "parsed",
             "filename": filename,
             "items": items,
             "count": len(items),
@@ -87,8 +192,9 @@ def parse_receipt():
         }), 200
 
     except Exception as e:
+        update_receipt_session(receipt.id, scan_status="failed")
         print("PARSE ERROR:", str(e))
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"receipt_id": receipt.id, "scan_status": "failed", "error": str(e)}), 500
 
 
 @receipt_bp.route("/commit", methods=["POST"])
@@ -102,6 +208,7 @@ def commit_receipt():
 
     # Optional metadata: which file this came from (helps trace origin)
     filename = str(payload.get("filename") or "manual_entry").strip() or "manual_entry"
+    receipt_id = payload.get("receipt_id")
 
     cleaned = []
     for raw in items:
@@ -113,12 +220,16 @@ def commit_receipt():
         return jsonify({"error": "No valid items to save"}), 400
 
     try:
-        saved = save_receipt_items(cleaned, filename, filename)
+        receipt, saved = save_receipt_items(cleaned, filename, filename, receipt_id=receipt_id)
         return jsonify({
             "message": f"Added {len(saved)} item{'s' if len(saved) != 1 else ''} to your fridge.",
+            "receipt_id": receipt.id,
+            "scan_status": receipt.scan_status,
             "items": saved,
             "count": len(saved),
         }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         print("COMMIT ERROR:", str(e))
         return jsonify({"error": str(e)}), 500

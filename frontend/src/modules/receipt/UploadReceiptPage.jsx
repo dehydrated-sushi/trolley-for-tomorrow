@@ -26,6 +26,14 @@ export default function UploadReceiptPage() {
   const [isError, setIsError] = useState(false)
   const [draft, setDraft] = useState([]) // editable item rows
   const [sourceFilename, setSourceFilename] = useState('')
+  const [sourceReceiptId, setSourceReceiptId] = useState(null)
+  const [receiptScanStatus, setReceiptScanStatus] = useState('')
+  const [receiptSessions, setReceiptSessions] = useState([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [selectedSession, setSelectedSession] = useState(null)
+  const [selectedSessionItems, setSelectedSessionItems] = useState([])
+  const [selectedSessionLoading, setSelectedSessionLoading] = useState(false)
+  const [selectedSessionError, setSelectedSessionError] = useState('')
   const [committedCount, setCommittedCount] = useState(0)
   // Reconciliation panel state. `matches` is the list of
   // { item, matchedReceiptName } pairs computed right after a successful
@@ -41,6 +49,53 @@ export default function UploadReceiptPage() {
     setMessage(txt)
     setIsError(err)
   }
+
+  const loadReceiptSessions = async () => {
+    setSessionsLoading(true)
+    try {
+      const response = await fetch(`${API_BASE}/api/receipts/sessions?limit=50`)
+      let data = {}
+      try { data = await response.json() } catch { data = {} }
+      if (response.ok) {
+        const sessions = Array.isArray(data.sessions) ? data.sessions : []
+        setReceiptSessions(sessions)
+        if (selectedSession) {
+          const updated = sessions.find((session) => session.id === selectedSession.id)
+          if (updated) setSelectedSession(updated)
+        }
+      }
+    } catch {
+      // Keep the receipt workflow usable even if history cannot load.
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  const openReceiptSession = async (session) => {
+    setSelectedSession(session)
+    setSelectedSessionItems([])
+    setSelectedSessionError('')
+    setSelectedSessionLoading(true)
+    try {
+      const response = await fetch(`${API_BASE}/api/receipts/sessions/${session.id}`)
+      let data = {}
+      try { data = await response.json() } catch { data = {} }
+      if (!response.ok) {
+        setSelectedSessionError(data.error || `Could not load session #${session.id}.`)
+        return
+      }
+      setSelectedSession(data.session || session)
+      setSelectedSessionItems(Array.isArray(data.items) ? data.items : [])
+    } catch (err) {
+      setSelectedSessionError(`Could not load session #${session.id}: ${err.message}`)
+    } finally {
+      setSelectedSessionLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadReceiptSessions()
+  }, [])
 
   // Manage preview-image object URL lifecycle.
   useEffect(() => {
@@ -69,6 +124,8 @@ export default function UploadReceiptPage() {
     }
     setFile(selected)
     setDraft([])
+    setSourceReceiptId(null)
+    setReceiptScanStatus('')
     setMsg('')
     setPhase('idle')
     setCommittedCount(0)
@@ -88,6 +145,8 @@ export default function UploadReceiptPage() {
     e.stopPropagation()
     setFile(null)
     setDraft([])
+    setSourceReceiptId(null)
+    setReceiptScanStatus('')
     setMsg('')
     setPhase('idle')
     setCommittedCount(0)
@@ -151,8 +210,11 @@ export default function UploadReceiptPage() {
       // If OCR didn't find anything, show one blank row to start manual entry
       setDraft(items.length ? items : [blankRow()])
       setSourceFilename(data.filename || file.name)
+      setSourceReceiptId(data.receipt_id || null)
+      setReceiptScanStatus(data.scan_status || 'parsed')
       setMsg(data.message || `Found ${items.length} item(s). Review and edit before confirming.`)
       setPhase('review')
+      loadReceiptSessions()
     } catch (err) {
       setMsg(`Something went wrong: ${err.message}`, true)
       setPhase('idle')
@@ -180,6 +242,8 @@ export default function UploadReceiptPage() {
     setMsg('')
     setPhase('idle')
     setSourceFilename('')
+    setSourceReceiptId(null)
+    setReceiptScanStatus('')
     setCommittedCount(0)
     setMatches([])
     setSelectedIds(new Set())
@@ -225,6 +289,7 @@ export default function UploadReceiptPage() {
     try {
       const payload = {
         filename: sourceFilename || 'manual_entry',
+        receipt_id: sourceReceiptId,
         items: validRows.map((r) => ({
           name: r.name.trim(),
           qty: r.qty.trim() || 1,
@@ -244,8 +309,11 @@ export default function UploadReceiptPage() {
         return
       }
       setCommittedCount(data.count || 0)
+      setSourceReceiptId(data.receipt_id || sourceReceiptId)
+      setReceiptScanStatus(data.scan_status || 'saved')
       setMsg(data.message || `Added ${data.count} item(s) to your fridge.`)
       setPhase('done')
+      loadReceiptSessions()
 
       // Reconcile against the shopping list. We match on the names the user
       // confirmed (validRows), not the raw OCR output, because the review
@@ -269,6 +337,8 @@ export default function UploadReceiptPage() {
     setFile(null)
     setDraft([blankRow()])
     setSourceFilename('manual_entry')
+    setSourceReceiptId(null)
+    setReceiptScanStatus('')
     setMsg('Add items manually. Tap "+ Add item" for more rows.')
     setPhase('review')
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -327,6 +397,17 @@ export default function UploadReceiptPage() {
           <p className="text-on-surface-variant mb-8">
             {committedCount} item{committedCount !== 1 ? 's' : ''} saved. They&apos;re ready for meal suggestions.
           </p>
+          {sourceReceiptId && (
+            <div className="mb-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high text-on-surface-variant text-sm font-semibold">
+              <span className="material-symbols-outlined text-base">receipt_long</span>
+              Receipt session #{sourceReceiptId}
+              {receiptScanStatus && (
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs uppercase tracking-widest">
+                  {receiptScanStatus}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Shopping-list reconciliation panel. Only renders when the
               confirmed items intersect the user's unchecked shopping list.
@@ -646,6 +727,139 @@ export default function UploadReceiptPage() {
 
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-surface-container-lowest rounded-[2.5rem] p-8 shadow-sm">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <h3 className="text-xl font-bold text-on-surface">Receipt sessions</h3>
+                  <p className="text-xs text-on-surface-variant mt-1">
+                    Latest scans saved in the database.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadReceiptSessions}
+                  disabled={sessionsLoading}
+                  className="w-10 h-10 rounded-full bg-surface-container-high text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 inline-flex items-center justify-center"
+                  title="Refresh receipt sessions"
+                  aria-label="Refresh receipt sessions"
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {sessionsLoading ? 'hourglass_top' : 'refresh'}
+                  </span>
+                </button>
+              </div>
+
+              {receiptSessions.length === 0 ? (
+                <div className="py-6 text-sm text-on-surface-variant">
+                  {sessionsLoading ? 'Loading sessions...' : 'No receipt sessions yet.'}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {receiptSessions.map((session) => {
+                    const active = selectedSession?.id === session.id || (sourceReceiptId && session.id === sourceReceiptId)
+                    return (
+                      <button
+                        type="button"
+                        key={session.id}
+                        onClick={() => openReceiptSession(session)}
+                        className={`w-full p-3 rounded-2xl border text-left transition-colors ${
+                          active
+                            ? 'bg-primary/10 border-primary/30'
+                            : 'bg-surface-container-low border-transparent hover:bg-surface-container-high'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-on-surface truncate">
+                              Session #{session.id}
+                            </p>
+                            <p className="text-xs text-on-surface-variant truncate">
+                              {session.original_filename || 'receipt'}
+                            </p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                            session.scan_status === 'saved'
+                              ? 'bg-primary/10 text-primary'
+                              : session.scan_status === 'failed'
+                                ? 'bg-error-container/40 text-error'
+                                : 'bg-surface-container-high text-on-surface-variant'
+                          }`}>
+                            {session.scan_status || 'new'}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-on-surface-variant">
+                          <span>{session.item_count || 0} item{session.item_count === 1 ? '' : 's'}</span>
+                          <span>
+                            {session.total_amount != null
+                              ? `$${Number(session.total_amount).toFixed(2)}`
+                              : 'No total'}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {selectedSession && (
+                <div className="mt-5 pt-5 border-t border-outline-variant/20">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-on-surface">
+                        Bought in session #{selectedSession.id}
+                      </h4>
+                      <p className="text-xs text-on-surface-variant truncate">
+                        {selectedSession.original_filename || 'receipt'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSession(null)
+                        setSelectedSessionItems([])
+                        setSelectedSessionError('')
+                      }}
+                      className="w-8 h-8 rounded-full hover:bg-surface-container-high text-on-surface-variant inline-flex items-center justify-center"
+                      aria-label="Close receipt session details"
+                    >
+                      <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                  </div>
+
+                  {selectedSessionLoading ? (
+                    <div className="py-5 text-sm text-on-surface-variant">Loading items...</div>
+                  ) : selectedSessionError ? (
+                    <div className="py-5 text-sm text-error">{selectedSessionError}</div>
+                  ) : selectedSessionItems.length === 0 ? (
+                    <div className="py-5 text-sm text-on-surface-variant">
+                      No bought items saved for this session yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {selectedSessionItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-[1fr_auto] gap-3 items-start p-3 rounded-2xl bg-white"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-on-surface truncate">
+                              {item.name}
+                            </p>
+                            <p className="text-xs text-on-surface-variant">
+                              Qty: {item.qty || '1'}
+                            </p>
+                          </div>
+                          <span className="text-sm font-bold text-primary">
+                            {item.price != null ? `$${Number(item.price).toFixed(2)}` : '-'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-[2.5rem] p-8 shadow-sm">
               <h3 className="text-xl font-bold text-on-surface mb-4">How it works</h3>
               <ol className="space-y-4">
                 <li className="flex gap-3">
@@ -692,6 +906,7 @@ export default function UploadReceiptPage() {
               <p className="text-sm text-on-surface-variant mt-1">
                 {validRows.length} item{validRows.length !== 1 ? 's' : ''} ready to save.
                 {' '}Edit anything below before confirming.
+                {sourceReceiptId ? ` Receipt session #${sourceReceiptId}.` : ''}
               </p>
             </div>
             <button

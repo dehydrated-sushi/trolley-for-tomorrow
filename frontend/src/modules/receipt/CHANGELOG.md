@@ -5,6 +5,17 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.2.0] — 2026-04-27
+
+### Added — Receipt session linkage
+
+- Stores the `receipt_id` returned by `/api/receipts/parse` and sends it to `/api/receipts/commit`, so confirmed receipt rows attach to the exact OCR scan session.
+- Clears the stored session id when users remove a file, discard a draft, upload another receipt, or switch to manual entry.
+- Adds a receipt-session history panel on the upload page, backed by `/api/receipts/sessions`, so the latest scan sessions are visible from the frontend.
+- Receipt-session rows can now be opened to show the bought items saved under that session.
+
+---
+
 ## [1.1.0] — 2026-04-24
 
 ### Added — Post-commit shopping-list reconciliation panel
