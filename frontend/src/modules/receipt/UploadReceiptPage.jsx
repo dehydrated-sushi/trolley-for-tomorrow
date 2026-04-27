@@ -202,6 +202,8 @@ export default function UploadReceiptPage() {
 
       const items = (data.items || []).map((it) => ({
         name: it.name || '',
+        matchedName: it.matched_name || '',
+        matchScore: it.match_score == null ? null : Number(it.match_score),
         qty: it.qty == null ? '1' : String(it.qty),
         price: it.price == null ? '' : String(it.price),
         _local: Math.random().toString(36).slice(2),
@@ -292,6 +294,8 @@ export default function UploadReceiptPage() {
         receipt_id: sourceReceiptId,
         items: validRows.map((r) => ({
           name: r.name.trim(),
+          matched_name: r.matchedName || null,
+          match_score: r.matchScore,
           qty: r.qty.trim() || 1,
           price: r.price.trim() === '' ? null : r.price,
         })),
@@ -846,6 +850,7 @@ export default function UploadReceiptPage() {
                             </p>
                             <p className="text-xs text-on-surface-variant">
                               Qty: {item.qty || '1'}
+                              {item.matched_name ? ` · matched: ${item.matched_name}` : ''}
                             </p>
                           </div>
                           <span className="text-sm font-bold text-primary">
@@ -956,14 +961,21 @@ export default function UploadReceiptPage() {
                     blank ? 'bg-surface-container-low/40' : 'bg-surface-container-low'
                   }`}
                 >
-                  <input
-                    type="text"
-                    value={row.name}
-                    onChange={(e) => updateRow(row._local, 'name', e.target.value)}
-                    placeholder="e.g. chicken breast"
-                    disabled={phase === 'committing'}
-                    className="px-3 py-2 rounded-lg bg-white text-sm text-on-surface placeholder-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
+                  <div className="min-w-0">
+                    <input
+                      type="text"
+                      value={row.name}
+                      onChange={(e) => updateRow(row._local, 'name', e.target.value)}
+                      placeholder="e.g. chicken breast"
+                      disabled={phase === 'committing'}
+                      className="w-full px-3 py-2 rounded-lg bg-white text-sm text-on-surface placeholder-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    {row.matchedName && (
+                      <p className="mt-1 px-1 text-[11px] text-on-surface-variant truncate">
+                        matched known item: {row.matchedName}
+                      </p>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={row.qty}

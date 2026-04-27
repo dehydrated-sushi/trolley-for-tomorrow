@@ -13,6 +13,7 @@ Follows semantic versioning as defined in the root README.
 - Clears the stored session id when users remove a file, discard a draft, upload another receipt, or switch to manual entry.
 - Adds a receipt-session history panel on the upload page, backed by `/api/receipts/sessions`, so the latest scan sessions are visible from the frontend.
 - Receipt-session rows can now be opened to show the bought items saved under that session.
+- OCR review rows now display the formatted product name from the receipt and show the matched known ingredient as a small hint underneath when available.
 
 ---
 

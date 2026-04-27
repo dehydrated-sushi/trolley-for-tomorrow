@@ -62,6 +62,8 @@ class ReceiptItem(db.Model):
     receipt_path = db.Column(db.String(500), nullable=False)
 
     name = db.Column(db.String(255), nullable=False)
+    matched_name = db.Column(db.String(255), nullable=True)
+    match_score = db.Column(db.Float, nullable=True)
     qty = db.Column(db.String(50), nullable=False, default="1")
     price = db.Column(db.Float, nullable=True)
 
@@ -81,6 +83,8 @@ class ReceiptItem(db.Model):
             "receipt_filename": self.receipt_filename,
             "receipt_path": self.receipt_path,
             "name": self.name,
+            "matched_name": self.matched_name,
+            "match_score": self.match_score,
             "qty": self.qty,
             "price": self.price,
             "created_at": self.created_at.isoformat()

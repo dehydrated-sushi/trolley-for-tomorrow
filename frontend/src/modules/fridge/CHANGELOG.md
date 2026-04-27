@@ -5,6 +5,15 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.2.0] — 2026-04-27
+
+### Added
+
+- Virtual fridge now groups high-confidence similar products into one card. Exact product-name matches group together, and receipt rows with the same `matched_name` group only when `match_score >= 0.9`.
+- Grouped cards show combined quantity, combined price, a `N similar` badge, and a short "Includes ..." hint while still preserving the original receipt rows behind the scenes.
+
+---
+
 ## [1.1.0] — 2026-04-24
 
 ### Added — Manual add / edit / delete for fridge items

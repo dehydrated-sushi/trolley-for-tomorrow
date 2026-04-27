@@ -12,7 +12,13 @@ def test_parse_creates_receipt_session_without_saving_items(app, client, monkeyp
     monkeypatch.setattr(
         receipt_routes,
         "process_receipt",
-        lambda _path: [{"name": "milk", "qty": "2 l", "price": 4.5}],
+        lambda _path: [{
+            "name": "Woolworths Lite Milk",
+            "matched_name": "milk",
+            "match_score": 1.0,
+            "qty": "2 l",
+            "price": 4.5,
+        }],
     )
 
     response = client.post(
@@ -26,6 +32,8 @@ def test_parse_creates_receipt_session_without_saving_items(app, client, monkeyp
     assert data["receipt_id"]
     assert data["scan_status"] == "parsed"
     assert data["count"] == 1
+    assert data["items"][0]["name"] == "Woolworths Lite Milk"
+    assert data["items"][0]["matched_name"] == "milk"
 
     with app.app_context():
         receipt = db.session.get(Receipt, data["receipt_id"])
@@ -51,7 +59,13 @@ def test_commit_links_receipt_items_to_existing_session(app, client):
             "receipt_id": receipt_id,
             "filename": "woolies.jpg",
             "items": [
-                {"name": "baby spinach", "qty": "120 g", "price": "3.50"},
+                {
+                    "name": "WW Baby Spinach",
+                    "matched_name": "baby spinach",
+                    "match_score": "1.5",
+                    "qty": "120 g",
+                    "price": "3.50",
+                },
                 {"name": "eggs", "qty": "12 pack", "price": "6.20"},
             ],
         },
@@ -70,6 +84,9 @@ def test_commit_links_receipt_items_to_existing_session(app, client):
         assert receipt.item_count == 2
         assert receipt.total_amount == 9.7
         assert [item.receipt_id for item in items] == [receipt_id, receipt_id]
+        assert items[0].name == "WW Baby Spinach"
+        assert items[0].matched_name == "baby spinach"
+        assert items[0].match_score == 1.5
 
 
 def test_list_receipt_sessions_returns_recent_sessions(app, client):
@@ -108,7 +125,13 @@ def test_get_receipt_session_returns_bought_items(app, client):
             "receipt_id": receipt_id,
             "filename": "items.jpg",
             "items": [
-                {"name": "milk", "qty": "2 l", "price": "4.50"},
+                {
+                    "name": "Woolworths Lite Milk",
+                    "matched_name": "milk",
+                    "match_score": "1.0",
+                    "qty": "2 l",
+                    "price": "4.50",
+                },
                 {"name": "bread", "qty": "1", "price": "3.20"},
             ],
         },
@@ -120,5 +143,7 @@ def test_get_receipt_session_returns_bought_items(app, client):
     data = response.get_json()
     assert data["session"]["id"] == receipt_id
     assert data["count"] == 2
-    assert [item["name"] for item in data["items"]] == ["milk", "bread"]
+    assert [item["name"] for item in data["items"]] == ["Woolworths Lite Milk", "bread"]
+    assert data["items"][0]["matched_name"] == "milk"
+    assert data["items"][0]["match_score"] == 1.0
     assert [item["receipt_id"] for item in data["items"]] == [receipt_id, receipt_id]

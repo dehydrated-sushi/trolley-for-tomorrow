@@ -3,6 +3,7 @@ from core.database import db
 from sqlalchemy import text
 
 from modules.nutrition.classifier import classify
+from modules.receipt.service import ensure_receipt_session_schema
 
 bp = Blueprint("fridge_bp", __name__, url_prefix="/api/fridge")
 
@@ -26,19 +27,22 @@ def _row_to_dict(row):
 @bp.route("/items", methods=["GET"])
 def get_fridge_items():
     try:
+        ensure_receipt_session_schema()
         # LEFT JOIN known_ingredients to get pre-classified category.
         # Fallback to on-the-fly classification if not seeded yet.
         result = db.session.execute(text("""
             SELECT
                 r.id,
                 r.name,
+                r.matched_name,
+                r.match_score,
                 r.qty,
                 r.price,
                 r.created_at,
                 ki.category AS category
             FROM receipt_items r
             LEFT JOIN known_ingredients ki
-              ON LOWER(TRIM(r.name)) = LOWER(ki.ingredient_name)
+              ON LOWER(TRIM(COALESCE(r.matched_name, r.name))) = LOWER(ki.ingredient_name)
             ORDER BY r.created_at DESC
         """))
 

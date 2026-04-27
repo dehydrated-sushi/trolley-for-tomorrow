@@ -73,6 +73,8 @@ def create_tables():
         receipt_filename TEXT,
         receipt_path TEXT,
         name TEXT NOT NULL,
+        matched_name TEXT,
+        match_score DOUBLE PRECISION,
         qty TEXT,
         price DOUBLE PRECISION,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -80,6 +82,12 @@ def create_tables():
 
     ALTER TABLE receipt_items
         ADD COLUMN IF NOT EXISTS receipt_id INTEGER REFERENCES receipts(id);
+
+    ALTER TABLE receipt_items
+        ADD COLUMN IF NOT EXISTS matched_name TEXT;
+
+    ALTER TABLE receipt_items
+        ADD COLUMN IF NOT EXISTS match_score DOUBLE PRECISION;
 
     CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id
         ON receipt_items (receipt_id);

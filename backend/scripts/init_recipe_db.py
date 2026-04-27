@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS receipt_items (
     receipt_filename TEXT,
     receipt_path TEXT,
     name TEXT NOT NULL,
+    matched_name TEXT,
+    match_score REAL,
     qty TEXT,
     price REAL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -85,6 +87,10 @@ receipt_item_columns = {
 
 if "receipt_id" not in receipt_item_columns:
     cursor.execute("ALTER TABLE receipt_items ADD COLUMN receipt_id INTEGER")
+if "matched_name" not in receipt_item_columns:
+    cursor.execute("ALTER TABLE receipt_items ADD COLUMN matched_name TEXT")
+if "match_score" not in receipt_item_columns:
+    cursor.execute("ALTER TABLE receipt_items ADD COLUMN match_score REAL")
 
 cursor.execute("""
 CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id
