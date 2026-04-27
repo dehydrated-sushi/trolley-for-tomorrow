@@ -93,21 +93,21 @@ export default function LoginPage() {
                 <span className="font-headline font-extrabold text-2xl tracking-tighter">Trolley for Tomorrow</span>
               </div>
               <h1 className="font-headline text-5xl font-bold text-on-primary leading-tight mb-6">
-                Sustain your home,<br />
-                <span className="text-primary-fixed">nurture your budget.</span>
+                Reduce waste at home,<br />
+                <span className="text-primary-fixed">consume more responsibly.</span>
               </h1>
               <p className="text-on-primary/80 text-lg max-w-md">
-                Join thousands of households managing their kitchen inventory with editorial precision and organic warmth.
+                Sign in to track food more intentionally, use ingredients before they expire, and build healthier low-waste habits.
               </p>
             </div>
             <div className="z-10 grid grid-cols-2 gap-4 mt-12">
               <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl">
                 <span className="material-symbols-outlined text-primary-fixed mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>energy_savings_leaf</span>
-                <p className="text-on-primary text-sm font-medium">Reduce Waste</p>
+                <p className="text-on-primary text-sm font-medium">Waste Less Food</p>
               </div>
               <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl">
-                <span className="material-symbols-outlined text-primary-fixed mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>savings</span>
-                <p className="text-on-primary text-sm font-medium">Save $200+/mo</p>
+                <span className="material-symbols-outlined text-primary-fixed mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>public</span>
+                <p className="text-on-primary text-sm font-medium">Lower Your Impact</p>
               </div>
             </div>
             <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-primary-container rounded-full blur-[100px] opacity-40"></div>
@@ -119,7 +119,7 @@ export default function LoginPage() {
               <header className="mb-10">
                 <h2 className="font-headline text-3xl font-bold text-on-surface mb-2">Welcome back</h2>
                 <p className="text-on-surface-variant text-sm">
-                  Use a real backend account, or test with {TEST_ACCOUNT.email} / {TEST_ACCOUNT.password}.
+                  Sign in to continue reducing food waste and making more responsible household choices.
                 </p>
               </header>
 

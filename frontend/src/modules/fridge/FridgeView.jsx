@@ -20,6 +20,89 @@ import { Link } from 'react-router-dom'
 
 const EASE = [0.22, 1, 0.36, 1]
 const UNDO_MS = 4000
+const HIGH_CONFIDENCE_MATCH = 0.9
+
+function normaliseFridgeName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(ww|woolworths|coles|aldi|iga|rspca)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function groupKeyForItem(item) {
+  const matched = normaliseFridgeName(item.matched_name)
+  const score = Number(item.match_score)
+  if (matched && Number.isFinite(score) && score >= HIGH_CONFIDENCE_MATCH) {
+    return `match:${matched}`
+  }
+  const name = normaliseFridgeName(item.name)
+  return name ? `name:${name}` : `id:${item.id}`
+}
+
+function parseQty(value) {
+  const raw = String(value ?? '1').trim()
+  const match = raw.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/)
+  if (!match) return null
+  return {
+    value: Number(match[1]),
+    unit: (match[2] || 'each').toLowerCase(),
+  }
+}
+
+function combineQty(items) {
+  const parsed = items.map((item) => parseQty(item.qty))
+  if (parsed.some((qty) => !qty)) {
+    return items.length === 1 ? (items[0].qty ?? '1') : `${items.length} items`
+  }
+
+  const unit = parsed[0].unit
+  if (parsed.some((qty) => qty.unit !== unit)) {
+    return `${items.length} items`
+  }
+
+  const total = parsed.reduce((sum, qty) => sum + qty.value, 0)
+  const rounded = Number.isInteger(total) ? String(total) : total.toFixed(2).replace(/\.?0+$/, '')
+  return unit === 'each' ? rounded : `${rounded} ${unit}`
+}
+
+function groupFridgeItems(rawItems) {
+  const groups = new Map()
+
+  for (const item of rawItems) {
+    if (item._pendingDelete) {
+      groups.set(`pending:${item.id}`, [item])
+      continue
+    }
+    const key = groupKeyForItem(item)
+    const group = groups.get(key) || []
+    group.push(item)
+    groups.set(key, group)
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const sorted = [...group].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    const primary = sorted[0]
+    const priceValues = sorted
+      .map((item) => Number(item.price))
+      .filter((price) => Number.isFinite(price))
+    const price = priceValues.length
+      ? Number(priceValues.reduce((sum, value) => sum + value, 0).toFixed(2))
+      : null
+
+    return {
+      ...primary,
+      id: primary.id,
+      item_ids: sorted.map((item) => item.id),
+      grouped_count: sorted.length,
+      grouped_names: Array.from(new Set(sorted.map((item) => item.name).filter(Boolean))),
+      qty: combineQty(sorted),
+      price,
+      _pendingDelete: sorted.every((item) => item._pendingDelete),
+    }
+  })
+}
 
 export default function FridgeView() {
   const [items, setItems] = useState([])
@@ -69,22 +152,28 @@ export default function FridgeView() {
     for (const [, { timer }] of timers) clearTimeout(timer)
   }, [])
 
+  const groupedItems = useMemo(() => groupFridgeItems(items), [items])
+
   const categoryCounts = useMemo(() => {
     const c = {}
-    for (const i of items) {
+    for (const i of groupedItems) {
       if (i._pendingDelete) continue
       const k = i.category || 'other'
       c[k] = (c[k] || 0) + 1
     }
     return c
-  }, [items])
+  }, [groupedItems])
 
   const visible = useMemo(
-    () => (filter === 'all' ? items : items.filter((i) => (i.category || 'other') === filter)),
-    [items, filter],
+    () => (filter === 'all' ? groupedItems : groupedItems.filter((i) => (i.category || 'other') === filter)),
+    [groupedItems, filter],
   )
 
   const liveCount = useMemo(() => items.filter((i) => !i._pendingDelete).length, [items])
+  const liveGroupCount = useMemo(
+    () => groupedItems.filter((i) => !i._pendingDelete).length,
+    [groupedItems],
+  )
 
   // -- Add / edit handlers ---------------------------------------------
 
@@ -94,6 +183,7 @@ export default function FridgeView() {
   }
 
   const openEdit = (item) => {
+    if ((item.grouped_count || 1) > 1) return
     setEditingItem(item)
     setAddOpen(true)
   }
@@ -134,25 +224,26 @@ export default function FridgeView() {
   // -- Delete with inline undo -----------------------------------------
 
   const handleRequestDelete = (item) => {
+    const ids = item.item_ids || [item.id]
     // Mark locally; schedule the real DELETE after the undo window.
     setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, _pendingDelete: true } : i)),
+      prev.map((i) => (ids.includes(i.id) ? { ...i, _pendingDelete: true } : i)),
     )
     const timer = setTimeout(async () => {
       try {
-        await apiFetch(`/api/fridge/items/${item.id}`, { method: 'DELETE' })
-        setItems((prev) => prev.filter((i) => i.id !== item.id))
+        await Promise.all(ids.map((id) => apiFetch(`/api/fridge/items/${id}`, { method: 'DELETE' })))
+        setItems((prev) => prev.filter((i) => !ids.includes(i.id)))
       } catch (err) {
         // Backend rejected — revert local state and tell the user.
         setItems((prev) =>
-          prev.map((i) => (i.id === item.id ? { ...i, _pendingDelete: false } : i)),
+          prev.map((i) => (ids.includes(i.id) ? { ...i, _pendingDelete: false } : i)),
         )
         toast.show({ message: `Could not delete ${item.name}`, tone: 'error' })
       } finally {
         deleteTimersRef.current.delete(item.id)
       }
     }, UNDO_MS)
-    deleteTimersRef.current.set(item.id, { timer, name: item.name })
+    deleteTimersRef.current.set(item.id, { timer, name: item.name, ids })
   }
 
   const handleUndoDelete = (itemId) => {
@@ -162,7 +253,10 @@ export default function FridgeView() {
       deleteTimersRef.current.delete(itemId)
     }
     setItems((prev) =>
-      prev.map((i) => (i.id === itemId ? { ...i, _pendingDelete: false } : i)),
+      prev.map((i) => {
+        const ids = entry?.ids || [itemId]
+        return ids.includes(i.id) ? { ...i, _pendingDelete: false } : i
+      }),
     )
   }
 
@@ -174,7 +268,9 @@ export default function FridgeView() {
         <div>
           <h1 className="text-4xl font-extrabold font-headline text-on-surface tracking-tight mb-2">Your Virtual Fridge</h1>
           <p className="text-on-surface-variant max-w-lg leading-relaxed">
-            {loading ? 'Loading your inventory...' : `Tracking ${liveCount} ${liveCount === 1 ? 'item' : 'items'}, tagged by nutritional category.`}
+            {loading
+              ? 'Loading your inventory...'
+              : `Tracking ${liveCount} ${liveCount === 1 ? 'item' : 'items'} in ${liveGroupCount} ${liveGroupCount === 1 ? 'group' : 'groups'}, tagged by nutritional category.`}
           </p>
         </div>
         <div className="flex gap-2 items-center flex-wrap justify-end">
@@ -308,7 +404,7 @@ export default function FridgeView() {
                     : 'px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-sm font-semibold hover:bg-surface-container-highest'
                 }
               >
-                All · {liveCount}
+                All · {liveGroupCount}
               </button>
               {Object.keys(CATEGORY_FALLBACK)
                 .filter((k) => (categoryCounts[k] || 0) > 0)
@@ -387,15 +483,17 @@ export default function FridgeView() {
 
                     {/* Hover action buttons — top-right */}
                     <div className="absolute top-3 right-3 z-[5] flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(item)}
-                        className="w-7 h-7 rounded-full bg-white/90 hover:bg-white text-on-surface flex items-center justify-center shadow-sm"
-                        title={`Edit ${item.name}`}
-                        aria-label={`Edit ${item.name}`}
-                      >
-                        <span className="material-symbols-outlined text-[15px]">edit</span>
-                      </button>
+                      {(item.grouped_count || 1) === 1 && (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(item)}
+                          className="w-7 h-7 rounded-full bg-white/90 hover:bg-white text-on-surface flex items-center justify-center shadow-sm"
+                          title={`Edit ${item.name}`}
+                          aria-label={`Edit ${item.name}`}
+                        >
+                          <span className="material-symbols-outlined text-[15px]">edit</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleRequestDelete(item)}
@@ -424,9 +522,22 @@ export default function FridgeView() {
                       </div>
                     </div>
                     <div className="px-1">
-                      <h3 className="font-bold text-lg text-on-surface mb-1">{item.name}</h3>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-bold text-lg text-on-surface leading-snug">{item.name}</h3>
+                        {(item.grouped_count || 1) > 1 && (
+                          <span className="mt-0.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                            {item.grouped_count} similar
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-on-surface-variant mb-3">
                         Added {new Date(item.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                        {(item.grouped_names || []).length > 1 && (
+                          <span className="block truncate mt-0.5">
+                            Includes {item.grouped_names.slice(0, 2).join(', ')}
+                            {item.grouped_names.length > 2 ? ` +${item.grouped_names.length - 2} more` : ''}
+                          </span>
+                        )}
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold bg-surface-container px-3 py-1.5 rounded-lg text-on-secondary-container">
@@ -448,6 +559,9 @@ export default function FridgeView() {
               <h2 className="text-3xl font-extrabold font-headline mb-4">Larder Overview</h2>
               <p className="text-on-surface-variant mb-8 max-w-md leading-relaxed">
                 You have <span className="text-primary font-bold">{liveCount} items</span> in your virtual fridge, spread across {Object.keys(categoryCounts).length} nutritional categories.
+                {liveGroupCount !== liveCount && (
+                  <span> Similar products are grouped into {liveGroupCount} fridge cards.</span>
+                )}
               </p>
               <Link to="/meals" className="inline-flex items-center gap-2 primary-gradient text-on-primary px-8 py-3 rounded-xl font-bold shadow-lg">
                 Get Meal Suggestions <span className="material-symbols-outlined">arrow_forward</span>
@@ -455,8 +569,8 @@ export default function FridgeView() {
             </div>
             <div className="relative w-full md:w-1/3 aspect-square bg-white/40 rounded-[2rem] flex items-center justify-center border border-white/20 backdrop-blur-sm">
               <div className="text-center">
-                <span className="text-6xl font-black text-primary font-headline block">{liveCount}</span>
-                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Active Items</span>
+                <span className="text-6xl font-black text-primary font-headline block">{liveGroupCount}</span>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Fridge Groups</span>
               </div>
               <div className="absolute -top-4 -right-4 w-12 h-12 bg-tertiary-container rounded-full flex items-center justify-center">
                 <span className="material-symbols-outlined text-on-tertiary-container">eco</span>

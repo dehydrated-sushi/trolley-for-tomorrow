@@ -1,21 +1,41 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { clearSession, isAuthenticated } from '../lib/auth'
+import { clearSession, getUserProfile, isAuthenticated } from '../lib/auth'
 
 const NAV_LINKS = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Virtual Fridge', to: '/fridge' },
   { label: 'Meal Plans', to: '/meals' },
   { label: 'Shopping List', to: '/shopping' },
+  { label: 'Profile', to: '/profile' },
 ]
 
 export default function TopNav() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const loggedIn = isAuthenticated()
+  const [avatar, setAvatar] = useState(() => localStorage.getItem('profile_avatar_data') || '')
+  const [userName, setUserName] = useState(() => getUserProfile()?.name || 'Profile')
 
   if (!loggedIn) {
     return null
   }
+
+  useEffect(() => {
+    const syncProfile = () => {
+      setAvatar(localStorage.getItem('profile_avatar_data') || '')
+      setUserName(getUserProfile()?.name || 'Profile')
+    }
+
+    syncProfile()
+    window.addEventListener('profile-updated', syncProfile)
+    window.addEventListener('focus', syncProfile)
+
+    return () => {
+      window.removeEventListener('profile-updated', syncProfile)
+      window.removeEventListener('focus', syncProfile)
+    }
+  }, [])
 
   function handleLogout() {
     clearSession()
@@ -46,8 +66,20 @@ export default function TopNav() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Link to="/dashboard" className="p-2 rounded-lg hover:bg-emerald-100/50 transition-all duration-300">
-            <span className="material-symbols-outlined text-emerald-800">account_circle</span>
+          <Link
+            to="/profile"
+            className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 hover:bg-emerald-100/50 transition-all duration-300"
+          >
+            <span className="h-9 w-9 rounded-full overflow-hidden bg-emerald-100 flex items-center justify-center border border-emerald-200">
+              {avatar ? (
+                <img src={avatar} alt={userName} className="h-full w-full object-cover" />
+              ) : (
+                <span className="material-symbols-outlined text-emerald-800">account_circle</span>
+              )}
+            </span>
+            <span className="hidden md:block text-sm font-semibold text-emerald-900 max-w-[7rem] truncate">
+              {userName}
+            </span>
           </Link>
           <button
             type="button"

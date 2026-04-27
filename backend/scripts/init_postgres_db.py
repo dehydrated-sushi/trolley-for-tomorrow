@@ -50,15 +50,47 @@ def create_tables():
         category TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS receipts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER DEFAULT 1,
+        original_filename TEXT NOT NULL,
+        stored_file_path TEXT,
+        scan_source TEXT DEFAULT 'upload',
+        store_name TEXT,
+        purchase_date DATE,
+        scan_status TEXT DEFAULT 'uploaded',
+        raw_ocr_text TEXT,
+        parser_version TEXT,
+        item_count INTEGER DEFAULT 0,
+        total_amount DOUBLE PRECISION,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS receipt_items (
         id SERIAL PRIMARY KEY,
+        receipt_id INTEGER REFERENCES receipts(id),
         receipt_filename TEXT,
         receipt_path TEXT,
         name TEXT NOT NULL,
+        matched_name TEXT,
+        match_score DOUBLE PRECISION,
         qty TEXT,
         price DOUBLE PRECISION,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE receipt_items
+        ADD COLUMN IF NOT EXISTS receipt_id INTEGER REFERENCES receipts(id);
+
+    ALTER TABLE receipt_items
+        ADD COLUMN IF NOT EXISTS matched_name TEXT;
+
+    ALTER TABLE receipt_items
+        ADD COLUMN IF NOT EXISTS match_score DOUBLE PRECISION;
+
+    CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id
+        ON receipt_items (receipt_id);
 
     CREATE TABLE IF NOT EXISTS fridge_items (
         id SERIAL PRIMARY KEY,
@@ -296,6 +328,7 @@ def main():
     print("Tables created/updated:")
     print("- recipes")
     print("- known_ingredients")
+    print("- receipts")
     print("- receipt_items")
     print("- fridge_items")
     print("- user_preferences")

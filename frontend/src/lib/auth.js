@@ -15,6 +15,21 @@ export function saveSession({ token, user, source = 'backend' }) {
   localStorage.setItem('auth_source', source)
 }
 
+export function getUserProfile() {
+  const raw = localStorage.getItem('user_profile')
+  if (!raw) return null
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+export function updateUserProfile(nextUser) {
+  localStorage.setItem('user_profile', JSON.stringify(nextUser))
+}
+
 export function clearSession() {
   localStorage.removeItem('isLoggedIn')
   localStorage.removeItem('token')

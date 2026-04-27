@@ -4,8 +4,30 @@ import shutil
 import pandas as pd
 import pytesseract
 from PIL import Image, ImageOps, ImageFilter
+from pillow_heif import register_heif_opener
+register_heif_opener()
 
 KNOWN_ITEMS_PATH = "data/processed/known_ingredients.csv"
+
+FOOTER_START_PATTERNS = [
+    r"\bsub\s*total\b",
+    r"\bsubtotal\b",
+    r"\btotal\b",
+    r"\bamount\s+due\b",
+    r"\bbalance\s+due\b",
+    r"\bcard\s+payment\b",
+    r"\bpayment\b",
+    r"\bpaid\b",
+    r"\btender\b",
+]
+
+NON_PRODUCT_PATTERNS = [
+    "gst", "saved", "credits", "approved", "debit", "credit", "eftpos",
+    "mastercard", "visa", "purchase", "change", "taxable", "invoice",
+    "coupon", "offers expire", "thank you", "visit", "abn", "term id",
+    "card", "trans", "glen huntly", "woolworths group", "flybuys",
+    "everyday rewards", "rewards", "member", "points", "receipt",
+]
 
 
 def find_tesseract():
@@ -62,17 +84,21 @@ def extract_qty(text):
     text = text.lower().strip()
 
     patterns = [
-        r"\b(\d+(?:\.\d+)?)\s*(kg)\b",
-        r"\b(\d+(?:\.\d+)?)\s*(g)\b",
-        r"\b(\d+(?:\.\d+)?)\s*(l)\b",
-        r"\b(\d+(?:\.\d+)?)\s*(ml)\b",
+        r"\bqty\s*[:x]?\s*(\d+(?:\.\d+)?)\b",
+        r"\b(\d+(?:\.\d+)?)\s*[x@]\s*\$?\d+\.\d{2}\b",
+        r"\b(\d+(?:\.\d+)?)\s*(pack|pk|pcs|pieces|each|ea)\b",
+        r"\b(\d+(?:\.\d+)?)\s*(kg|g|l|ml)\b",
     ]
 
     for pattern in patterns:
         m = re.search(pattern, text)
         if m:
             value = m.group(1)
-            unit = m.group(2)
+            unit = m.group(2) if len(m.groups()) > 1 else "each"
+            if unit == "pk":
+                unit = "pack"
+            if unit == "ea":
+                unit = "each"
             return f"{value} {unit}"
 
     return None
@@ -80,15 +106,31 @@ def extract_qty(text):
 
 def remove_weight_price(text):
     text = re.sub(r"\$?\d+\.\d{2}\b", " ", text)
-    text = re.sub(r"\b\d+(?:\.\d+)?\s*(kg|g|l|ml)\b", " ", text)
-    text = re.sub(r"\bqty\b", " ", text)
-    text = re.sub(r"\beach\b", " ", text)
+    text = re.sub(r"\bqty\s*[:x]?\s*\d+(?:\.\d+)?\b", " ", text)
+    text = re.sub(r"\b\d+(?:\.\d+)?\s*[x@]\b", " ", text)
+    text = re.sub(r"\b\d+(?:\.\d+)?\s*(kg|g|l|ml|pack|pk|pcs|pieces|each|ea)\b", " ", text)
     text = re.sub(r"\bp/p\b", " ", text)
     text = re.sub(r"\bbulk\b", " ", text)
     text = re.sub(r"\b\d+\b", " ", text)
     text = re.sub(r"[^a-z\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def format_product_name(text):
+    acronyms = {
+        "ww": "WW",
+        "bbq": "BBQ",
+        "uht": "UHT",
+        "a2": "A2",
+    }
+
+    words = []
+    for word in str(text).split():
+        lower = word.lower()
+        words.append(acronyms.get(lower, lower.capitalize()))
+
+    return " ".join(words)
 
 
 def normalize_tokens(text):
@@ -127,14 +169,13 @@ def best_match_product_to_known(product_text, known_items):
 
 
 def looks_like_product_line(line):
-    bad_patterns = [
-        "subtotal", "total", "gst", "saved", "credits", "approved", "debit",
-        "mastercard", "purchase", "change", "taxable", "invoice", "coupon",
-        "offers expire", "thank you", "visit", "abn", "term id", "card",
-        "trans", "glen huntly", "woolworths group"
-    ]
     line_lower = line.lower()
-    return not any(bad in line_lower for bad in bad_patterns)
+    return not any(bad in line_lower for bad in NON_PRODUCT_PATTERNS)
+
+
+def is_footer_start_line(line):
+    line = clean_line(line)
+    return any(re.search(pattern, line) for pattern in FOOTER_START_PATTERNS)
 
 
 def parse_receipt_lines(lines, known_items, threshold=0.5):
@@ -142,6 +183,9 @@ def parse_receipt_lines(lines, known_items, threshold=0.5):
 
     for line in lines:
         line = clean_line(line)
+
+        if is_footer_start_line(line):
+            break
 
         if not looks_like_product_line(line):
             continue
@@ -157,7 +201,9 @@ def parse_receipt_lines(lines, known_items, threshold=0.5):
 
         if match_name and score >= threshold:
             results.append({
-                "name": match_name,
+                "name": format_product_name(product_text),
+                "matched_name": match_name,
+                "match_score": round(score, 3),
                 "qty": qty,
                 "price": price
             })
@@ -180,6 +226,8 @@ def process_receipt(image_path):
         raise RuntimeError("No known items loaded from CSV")
 
     image = Image.open(image_path)
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
     image = preprocess_image(image)
 
     text = pytesseract.image_to_string(image, config="--psm 6")

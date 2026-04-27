@@ -5,6 +5,15 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.2.0] — 2026-04-27
+
+### Changed
+
+- `GET /api/fridge/items` now returns receipt match metadata (`matched_name`, `match_score`) and classifies using the matched known ingredient where available. This lets the frontend group high-confidence similar products without losing the receipt's user-facing product name.
+- The endpoint runs the receipt-session schema guard before querying so databases are upgraded with `receipt_id`, `matched_name`, and `match_score` before fridge reads.
+
+---
+
 ## [1.1.0] — 2026-04-24
 
 ### Added — Manual fridge CRUD endpoints
