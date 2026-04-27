@@ -55,7 +55,20 @@ def _normalise_item(raw):
         except (TypeError, ValueError):
             price = None
 
-    return {"name": name, "qty": qty, "price": price}
+    item = {"name": name, "qty": qty, "price": price}
+
+    matched_name = str(raw.get("matched_name") or "").strip()
+    if matched_name:
+        item["matched_name"] = matched_name
+
+    match_score = raw.get("match_score")
+    if match_score not in (None, ""):
+        try:
+            item["match_score"] = float(match_score)
+        except (TypeError, ValueError):
+            pass
+
+    return item
 
 
 def _total_amount(items):

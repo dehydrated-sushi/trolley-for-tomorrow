@@ -16,3 +16,9 @@ Follows semantic versioning as defined in the root README.
 - Added `GET /api/receipts/sessions` for viewing recent receipt scan sessions in the frontend.
 - Added `GET /api/receipts/sessions/<id>` for opening one session and viewing the bought items attached to it.
 - Added idempotent schema creation/upgrade helper for local SQLite and AWS PostgreSQL environments.
+
+### Fixed
+
+- Receipt OCR parsing now stops at subtotal/total/payment footer sections, preventing loyalty, payment, and post-total lines from being matched as grocery items.
+- Quantity extraction now handles more common receipt formats including weights/volumes, packs, `qty 2`, and `2 x $3.00` style lines.
+- OCR results now keep the formatted receipt product name in `receipt_items.name` for frontend review, while storing the matched known ingredient separately as `matched_name` with `match_score`.

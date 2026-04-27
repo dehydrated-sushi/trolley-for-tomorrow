@@ -25,6 +25,10 @@ def ensure_receipt_session_schema():
     with db.engine.begin() as conn:
         if "receipt_id" not in columns:
             conn.execute(text("ALTER TABLE receipt_items ADD COLUMN receipt_id INTEGER"))
+        if "matched_name" not in columns:
+            conn.execute(text("ALTER TABLE receipt_items ADD COLUMN matched_name TEXT"))
+        if "match_score" not in columns:
+            conn.execute(text("ALTER TABLE receipt_items ADD COLUMN match_score DOUBLE PRECISION"))
 
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id "
@@ -126,6 +130,8 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
             continue
 
         qty = item.get("qty", 1)
+        matched_name = str(item.get("matched_name") or "").strip() or None
+        match_score = item.get("match_score", None)
         price = item.get("price", None)
 
         try:
@@ -133,11 +139,18 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
         except Exception:
             price = None
 
+        try:
+            match_score = float(match_score) if match_score not in [None, ""] else None
+        except Exception:
+            match_score = None
+
         receipt_item = ReceiptItem(
             receipt_id=receipt.id,
             receipt_filename=receipt_filename,
             receipt_path=receipt_path,
             name=name,
+            matched_name=matched_name,
+            match_score=match_score,
             qty=qty,
             price=price,
         )
@@ -147,6 +160,8 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
         saved_items.append({
             "receipt_id": receipt.id,
             "name": name,
+            "matched_name": matched_name,
+            "match_score": match_score,
             "qty": qty,
             "price": price
         })
