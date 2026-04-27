@@ -4,6 +4,8 @@ import shutil
 import pandas as pd
 import pytesseract
 from PIL import Image, ImageOps, ImageFilter
+from pillow_heif import register_heif_opener
+register_heif_opener()
 
 KNOWN_ITEMS_PATH = "data/processed/known_ingredients.csv"
 
@@ -180,6 +182,8 @@ def process_receipt(image_path):
         raise RuntimeError("No known items loaded from CSV")
 
     image = Image.open(image_path)
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
     image = preprocess_image(image)
 
     text = pytesseract.image_to_string(image, config="--psm 6")
