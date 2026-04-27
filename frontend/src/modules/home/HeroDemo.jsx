@@ -67,7 +67,7 @@ export default function HeroDemo() {
       {/* Editorial label — honest without being tacky. */}
       <div className="flex items-center justify-between mb-5">
         <span className="text-[10px] font-semibold text-emerald-900/50 uppercase tracking-[0.25em]">
-          How it works
+          How waste is reduced
         </span>
         <PhaseDots activeIdx={phaseIdx} />
       </div>
@@ -149,7 +149,7 @@ function ReceiptStage({ sequence, scanning }) {
         <div className="bg-[#fdfcf7] px-5 pt-3 pb-5 text-[#1a1a1a] font-mono text-[11px] leading-relaxed shadow-xl relative">
           <div className="text-center pb-2 border-b border-dashed border-black/20">
             <div className="font-bold tracking-widest text-[12px]">{sequence.store.toUpperCase()}</div>
-            <div className="text-[10px] text-black/50 mt-0.5">{sequence.date} · Tax Invoice</div>
+            <div className="text-[10px] text-black/50 mt-0.5">{sequence.date} · Food Log</div>
           </div>
           <div className="py-2 space-y-1.5">
             {sequence.receiptItems.map((it, i) => (
@@ -171,13 +171,13 @@ function ReceiptStage({ sequence, scanning }) {
                 transition={{ duration: 0.55, delay: scanning ? 0.25 + i * 0.35 : 0 }}
               >
                 <span className="truncate pr-3">{it.line}</span>
-                <span className="flex-shrink-0">${it.price}</span>
+                <span className="flex-shrink-0 uppercase text-black/55">logged</span>
               </motion.div>
             ))}
           </div>
           <div className="border-t border-dashed border-black/20 pt-2 flex justify-between font-bold">
-            <span>TOTAL</span>
-            <span>${sequence.receiptTotal}</span>
+            <span>ITEMS CAPTURED</span>
+            <span>{sequence.receiptItems.length}</span>
           </div>
         </div>
         {/* Zig-zag bottom edge */}
@@ -212,18 +212,14 @@ function ScanLine() {
 }
 
 /* ----------------------------------------------------------------------- */
-/* Phase: Budget — receipt total animates into the weekly spend bar         */
+/* Phase: Tracking progress — receipt items update the weekly flow bar      */
 /* ----------------------------------------------------------------------- */
 
 function BudgetStage({ sequence }) {
-  const { weekly, spentBefore } = sequence.budget
-  const receiptTotal = parseFloat(sequence.receiptTotal)
-  const spentAfter = spentBefore + receiptTotal
-
-  const pctBefore = Math.min(100, (spentBefore / weekly) * 100)
-  const pctAfter  = Math.min(100, (spentAfter / weekly) * 100)
-  const overBudget = spentAfter > weekly
-  const warning    = !overBudget && pctAfter >= 85
+  const pctBefore = sequence.tracking.before
+  const pctAfter  = sequence.tracking.after
+  const overBudget = false
+  const warning    = pctAfter >= 85
 
   const barColour = overBudget ? '#dc2626' : warning ? '#f59e0b' : '#10b981'
 
@@ -239,17 +235,18 @@ function BudgetStage({ sequence }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-700">savings</span>
-            <span className="font-bold text-emerald-900 text-sm">Weekly Budget</span>
+            <span className="font-bold text-emerald-900 text-sm">Waste reduction tracker</span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/60">
-            ${weekly.toFixed(0)} / wk
+            weekly target
           </span>
         </div>
 
-        {/* Spend display — "before" number cross-fades to "after" */}
+        {/* Progress display — keeps the current demo data but reframes it
+            around lower-waste weekly progress. */}
         <div className="flex items-baseline gap-2 mb-3">
-          <AnimatedDollar from={spentBefore} to={spentAfter} />
-          <span className="text-sm text-emerald-700/60">of ${weekly.toFixed(2)} spent</span>
+          <AnimatedPercent from={pctBefore} to={pctAfter} />
+          <span className="text-sm text-emerald-700/60">of this week&apos;s food activity now tracked</span>
         </div>
 
         {/* Animated bar */}
@@ -275,7 +272,7 @@ function BudgetStage({ sequence }) {
           className="absolute right-5 top-14 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-extrabold shadow-md"
         >
           <span className="material-symbols-outlined text-[13px]">receipt_long</span>
-          +${receiptTotal.toFixed(2)}
+          +{sequence.receiptItems.length} items
         </motion.div>
 
         {/* Status line — switches colour if over/warning */}
@@ -287,18 +284,18 @@ function BudgetStage({ sequence }) {
           style={{ color: overBudget ? '#dc2626' : warning ? '#b45309' : '#047857' }}
         >
           {overBudget
-            ? `Over budget by $${(spentAfter - weekly).toFixed(2)}`
+            ? 'Higher-risk week — review what should be used first'
             : warning
-              ? `Tight week — $${(weekly - spentAfter).toFixed(2)} left`
-              : `$${(weekly - spentAfter).toFixed(2)} remaining this week`}
+              ? 'Use-soon foods detected — act before they become waste'
+              : 'On track to use more of what you already bought'}
         </motion.p>
       </div>
     </motion.div>
   )
 }
 
-/** Animated dollar figure — tweens from `from` to `to` over ~0.9s. */
-function AnimatedDollar({ from, to }) {
+/** Animated percentage figure — tweens from `from` to `to` over ~0.9s. */
+function AnimatedPercent({ from, to }) {
   const [display, setDisplay] = useState(from)
   useEffect(() => {
     const start = performance.now()
@@ -317,7 +314,7 @@ function AnimatedDollar({ from, to }) {
   }, [from, to])
   return (
     <span className="text-2xl font-black text-emerald-950 tabular-nums">
-      ${display.toFixed(2)}
+      {Math.round(display)}%
     </span>
   )
 }
@@ -343,10 +340,10 @@ function FridgeStage({ sequence, compact }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-700">kitchen</span>
-            <span className="font-bold text-emerald-900 text-sm">Your Fridge</span>
+            <span className="font-bold text-emerald-900 text-sm">Food at home</span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-600 text-white">
-            {sequence.fridgeItems.length} items
+            {sequence.fridgeItems.length} items to track
           </span>
         </div>
         <ul className="space-y-2">
@@ -408,15 +405,15 @@ function NutritionStage({ sequence }) {
 
   let verdict, verdictColour
   if (hasProtein && hasVeg && hasGrain) {
-    verdict = 'Well balanced'
+    verdict = 'Good variety on hand'
     verdictColour = '#047857'
   } else if (isDominated) {
     const dom = entries[0][0]
     const label = CATEGORY_COLOURS[dom]?.label?.toLowerCase() || dom
-    verdict = `${label.charAt(0).toUpperCase() + label.slice(1)}-heavy · add variety`
+    verdict = `${label.charAt(0).toUpperCase() + label.slice(1)}-heavy · plan to use these soon`
     verdictColour = '#b45309'
   } else {
-    verdict = 'Good start'
+    verdict = 'Enough variety to plan a low-waste meal'
     verdictColour = '#047857'
   }
 
@@ -432,10 +429,10 @@ function NutritionStage({ sequence }) {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-700">monitoring</span>
-            <span className="font-bold text-emerald-900 text-sm">Nutrition balance</span>
+            <span className="font-bold text-emerald-900 text-sm">Use-first balance</span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/60">
-            Your fridge
+            what should be used first
           </span>
         </div>
 
@@ -516,7 +513,7 @@ function RecipeStage({ sequence }) {
         <div className="relative">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-              Suggested recipe
+              Use-it-up recipe
             </span>
             <motion.span
               initial={{ scale: 0.8, opacity: 0 }}
@@ -572,10 +569,10 @@ function ShoppingStage({ sequence }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-700">shopping_basket</span>
-            <span className="font-bold text-emerald-900 text-sm">Next shopping list</span>
+            <span className="font-bold text-emerald-900 text-sm">Only buy what you need</span>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/60">
-            Based on recipes
+            based on what is missing
           </span>
         </div>
 
@@ -617,12 +614,12 @@ function ShoppingStage({ sequence }) {
           className="flex items-center justify-between pt-3 border-t border-emerald-100"
         >
           <span className="text-xs text-emerald-700/70">
-            Estimated <span className="font-bold text-emerald-950">${shoppingList.estimatedCost}</span>
+            Top-up kept to <span className="font-bold text-emerald-950">{shoppingList.items.length} essentials</span>
           </span>
-          {shoppingList.fitsBudget && (
+          {shoppingList.keepsListLean && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider">
               <span className="material-symbols-outlined text-[12px]">check_circle</span>
-              Fits your budget
+              avoids overbuying
             </span>
           )}
         </motion.div>
@@ -636,13 +633,13 @@ function ShoppingStage({ sequence }) {
 /* ----------------------------------------------------------------------- */
 
 const CAPTIONS = {
-  receipt:   'Snap your receipt',
-  scanning:  'Reading items…',
-  budget:    'Updates your weekly budget',
-  fridge:    'Fills your virtual fridge',
-  nutrition: 'Sees your nutritional balance',
-  recipe:    'Matches a recipe you can cook',
-  shopping:  'Plans what to buy next',
+  receipt:   'Capture what came home',
+  scanning:  'Reading food items…',
+  budget:    'Tracks progress toward lower waste',
+  fridge:    'Shows what should be used first',
+  nutrition: 'Highlights use-first balance',
+  recipe:    'Suggests meals to prevent waste',
+  shopping:  'Buys only what is still needed',
   reset:     '',
 }
 
@@ -695,14 +692,14 @@ function StaticFallback({ sequence }) {
     <div className="bg-white rounded-3xl shadow-2xl p-8" style={{ minHeight: 500 }}>
       <div className="mb-5">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest">
-          Example flow
+          Low-waste flow
         </span>
       </div>
       <div className="space-y-4">
         <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-emerald-700">kitchen</span>
-            <span className="font-bold text-emerald-900 text-sm">Your Fridge</span>
+            <span className="font-bold text-emerald-900 text-sm">Food at home</span>
           </div>
           <ul className="space-y-2">
             {sequence.fridgeItems.map((item) => (
@@ -717,7 +714,7 @@ function StaticFallback({ sequence }) {
         <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 text-white rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-              Suggested recipe
+              Use-it-up recipe
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-extrabold">
               {matchPct}% MATCH

@@ -42,11 +42,11 @@ function RecipeCard({ recipe, index }) {
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${accentColor}`} />
 
       <div className="pl-5 pr-4 py-3.5">
-        {/* Name + price */}
+        {/* Name + cue */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="text-sm font-medium text-[#0c1f14] leading-snug">{recipe.name}</div>
-          <div className={`text-sm font-medium flex-shrink-0 ${recipe.price === 'FREE' ? 'text-[#5cad76]' : 'text-[#3e7a52]'}`}>
-            {recipe.price}
+          <div className="text-[11px] font-medium flex-shrink-0 text-[#3e7a52] uppercase tracking-wide">
+            {recipe.cue}
           </div>
         </div>
 
@@ -215,14 +215,14 @@ export default function LiveDemo() {
             {hasGenerated && (
               <div className="mx-4 mb-4 p-3.5 bg-[#e8f5ed] border border-[#c4e8ce] rounded-xl text-center">
                 <p className="text-[13px] text-[#1e3d2a] leading-snug mb-2.5">
-                  ✨ <strong>Like these ideas?</strong> Sign up to unlock full weekly
-                  meal plans, expiry alerts, and shopping lists.
+                  ✨ <strong>Like these ideas?</strong> Log in to keep tracking food,
+                  get expiry alerts, and build low-waste meal routines.
                 </p>
                 <Link
-                  to="/signup"
+                  to="/login"
                   className="inline-block bg-[#5cad76] text-[#0c1f14] text-[13px] font-medium px-5 py-2 rounded-full hover:bg-[#8dcca0] hover:-translate-y-px transition-all duration-150"
                 >
-                  Create free account →
+                  Continue to log in →
                 </Link>
               </div>
             )}

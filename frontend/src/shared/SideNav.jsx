@@ -6,7 +6,7 @@ const SIDE_LINKS = [
   { label: 'Upload Receipt', icon: 'receipt_long',   to: '/upload-receipt' },
   { label: 'Meal Plans',    icon: 'restaurant_menu', to: '/meals' },
   { label: 'Shopping List', icon: 'shopping_basket', to: '/shopping' },
-  { label: 'Profile',       icon: 'account_circle',  to: '/profile' },
+  { label: 'Profile',       icon: 'person',          to: '/profile' },
 ]
 
 export default function SideNav() {
