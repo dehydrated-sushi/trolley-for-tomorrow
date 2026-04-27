@@ -2,6 +2,7 @@
 
 Wipes all USER DATA from the demo database:
   - receipt_items   (the virtual fridge + this-week spending source)
+  - receipts        (one row per receipt scan/upload session)
   - user_budget     (weekly spending goal)
   - user_preferences (dietary flags)
 
@@ -19,9 +20,9 @@ from core.database import db
 
 bp = Blueprint("dev_bp", __name__, url_prefix="/api/dev")
 
-# Tables that hold per-user state. Order doesn't matter for DELETE, but we
-# list receipts first since it's the largest.
-USER_DATA_TABLES = ("receipt_items", "user_budget", "user_preferences")
+# Tables that hold per-user state. Delete child rows before receipt sessions
+# so PostgreSQL foreign keys do not block the reset.
+USER_DATA_TABLES = ("receipt_items", "receipts", "user_budget", "user_preferences")
 
 
 @bp.route("/reset", methods=["POST"])

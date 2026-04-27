@@ -1,9 +1,124 @@
 from core.database import db
-from modules.receipt.schema import ReceiptItem
+from modules.receipt.schema import Receipt, ReceiptItem
+from sqlalchemy import inspect, text
 
 
-def save_receipt_items(items, receipt_filename, receipt_path):
+PARSER_VERSION = "receipt_ocr_v1"
+
+
+def ensure_receipt_session_schema():
+    """Create receipt-session storage without requiring a separate migration.
+
+    The deployed AWS database may already have `receipt_items` from the first
+    OCR iteration, so this keeps the migration additive: old rows simply keep
+    `receipt_id = NULL`.
+    """
+    Receipt.__table__.create(bind=db.engine, checkfirst=True)
+    ReceiptItem.__table__.create(bind=db.engine, checkfirst=True)
+
+    inspector = inspect(db.engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("receipt_items")
+    }
+
+    with db.engine.begin() as conn:
+        if "receipt_id" not in columns:
+            conn.execute(text("ALTER TABLE receipt_items ADD COLUMN receipt_id INTEGER"))
+
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id "
+            "ON receipt_items (receipt_id)"
+        ))
+
+
+def _total_amount(items):
+    total = 0.0
+    has_price = False
+    for item in items:
+        price = item.get("price")
+        if price in (None, ""):
+            continue
+        try:
+            total += float(price)
+            has_price = True
+        except (TypeError, ValueError):
+            continue
+    return round(total, 2) if has_price else None
+
+
+def create_receipt_session(
+    receipt_filename,
+    receipt_path,
+    scan_source="upload",
+    user_id=1,
+    scan_status="uploaded",
+):
+    ensure_receipt_session_schema()
+
+    receipt = Receipt(
+        user_id=user_id,
+        original_filename=receipt_filename,
+        stored_file_path=receipt_path,
+        scan_source=scan_source,
+        scan_status=scan_status,
+        parser_version=PARSER_VERSION,
+    )
+    db.session.add(receipt)
+    db.session.commit()
+    return receipt
+
+
+def update_receipt_session(receipt_id, **fields):
+    ensure_receipt_session_schema()
+
+    receipt = db.session.get(Receipt, receipt_id)
+    if receipt is None:
+        return None
+
+    allowed = {
+        "scan_status",
+        "raw_ocr_text",
+        "item_count",
+        "total_amount",
+        "store_name",
+        "purchase_date",
+    }
+    for key, value in fields.items():
+        if key in allowed:
+            setattr(receipt, key, value)
+
+    db.session.commit()
+    return receipt
+
+
+def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, user_id=1):
+    ensure_receipt_session_schema()
+
+    receipt = None
+    if receipt_id is not None:
+        try:
+            receipt_id = int(receipt_id)
+        except (TypeError, ValueError):
+            raise ValueError("receipt_id must be a number")
+
+        receipt = db.session.get(Receipt, receipt_id)
+        if receipt is None:
+            raise ValueError("Receipt session not found")
+    else:
+        receipt = Receipt(
+            user_id=user_id,
+            original_filename=receipt_filename,
+            stored_file_path=receipt_path,
+            scan_source="manual" if receipt_filename == "manual_entry" else "commit",
+            scan_status="uploaded",
+            parser_version=PARSER_VERSION,
+        )
+        db.session.add(receipt)
+        db.session.flush()
+
     saved_items = []
+    saved_models = []
 
     for item in items:
         name = str(item.get("name", "")).strip()
@@ -19,6 +134,7 @@ def save_receipt_items(items, receipt_filename, receipt_path):
             price = None
 
         receipt_item = ReceiptItem(
+            receipt_id=receipt.id,
             receipt_filename=receipt_filename,
             receipt_path=receipt_path,
             name=name,
@@ -26,13 +142,23 @@ def save_receipt_items(items, receipt_filename, receipt_path):
             price=price,
         )
         db.session.add(receipt_item)
+        saved_models.append(receipt_item)
 
         saved_items.append({
+            "receipt_id": receipt.id,
             "name": name,
             "qty": qty,
             "price": price
         })
 
+    receipt.item_count = len(saved_items)
+    receipt.total_amount = _total_amount(saved_items)
+    receipt.scan_status = "saved"
+
+    db.session.flush()
+    for saved, receipt_item in zip(saved_items, saved_models):
+        saved["id"] = receipt_item.id
+
     db.session.commit()
 
-    return saved_items
+    return receipt, saved_items
