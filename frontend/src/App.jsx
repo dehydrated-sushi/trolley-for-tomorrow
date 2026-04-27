@@ -10,6 +10,7 @@ import ProfilePage from './modules/profile/ProfilePage'
 import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
 import NotFoundPage from './modules/system/NotFoundPage'
+import WasteAnalyticsPage from './modules/waste_tracker/WasteAnalyticsPage'
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/shopping" element={<ShoppingListPage />} />
             <Route path="/upload-receipt" element={<UploadReceiptPage />} />
+            <Route path="/waste-analytics" element={<WasteAnalyticsPage />} />
           </Route>
         </Route>
 

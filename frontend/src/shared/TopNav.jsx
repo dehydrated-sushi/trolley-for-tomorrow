@@ -6,6 +6,7 @@ const NAV_LINKS = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Virtual Fridge', to: '/fridge' },
   { label: 'Meal Plans', to: '/meals' },
+  { label: 'Waste Analytics', to: '/waste-analytics' },
   { label: 'Shopping List', to: '/shopping' },
   { label: 'Profile', to: '/profile' },
 ]

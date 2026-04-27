@@ -4,6 +4,7 @@ const TABS = [
   { label: 'HOME', icon: 'dashboard', to: '/dashboard' },
   { label: 'FRIDGE', icon: 'kitchen', to: '/fridge' },
   { label: 'MEALS', icon: 'restaurant_menu', to: '/meals' },
+  { label: 'WASTE', icon: 'monitoring', to: '/waste-analytics' },
   { label: 'SHOP', icon: 'shopping_basket', to: '/shopping' },
   { label: 'PROFILE', icon: 'person', to: '/profile' },
 ]
