@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { API_BASE, apiFetch } from '../../lib/api'
 import NutritionLegend from '../../shared/NutritionLegend'
@@ -16,6 +16,7 @@ import {
 import NutritionPopover from './NutritionPopover'
 import SortDropdown from './SortDropdown'
 import FavouritesModal from './FavouritesModal'
+import { addCookedMeal } from '../../shared/cookedMeals'
 
 const SORT_OPTIONS = [
   { key: 'match',            label: 'Best match' },
@@ -131,6 +132,7 @@ function RecipeCard({
   tagDefs,
   isFavourited,
   onToggleFavourite,
+  onCookMeal,
   shoppingSet,
   highlighted,
   cardRef,
@@ -486,6 +488,28 @@ function RecipeCard({
             )}
           </div>
         )}
+
+        <div className="mt-7 flex flex-wrap gap-3">
+          <motion.button
+            type="button"
+            onClick={() => onCookMeal?.(meal)}
+            whileHover={{ scale: 1.02, y: -1 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-900 text-white px-5 py-3 text-sm font-bold hover:bg-emerald-800 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">skillet</span>
+            Cook Meal
+          </motion.button>
+
+          <Link
+            to="/waste-analytics"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-900 px-5 py-3 text-sm font-bold hover:bg-emerald-100 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+            View waste tracking
+          </Link>
+        </div>
       </div>
     </motion.div>
   )
@@ -494,6 +518,7 @@ function RecipeCard({
 const PER_PAGE = 20
 
 export default function MealsPage() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [availableItems, setAvailableItems] = useState([])
@@ -717,6 +742,12 @@ export default function MealsPage() {
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
 
   const filtersActive = strictOnly || hideDrinks || selectedTags.length > 0 || activePrefs.length > 0
+
+  const handleCookMeal = useCallback((meal) => {
+    addCookedMeal(meal)
+    toast.show({ message: `${meal.name} added to Waste Analytics.` })
+    navigate('/waste-analytics')
+  }, [navigate])
 
   // Summary of fridge contents — shown as a one-line preview when collapsed.
   const fridgeSummary = useMemo(() => {
@@ -1060,6 +1091,7 @@ export default function MealsPage() {
                   tagDefs={tagDefs}
                   isFavourited={favouriteIds.has(meal.id)}
                   onToggleFavourite={handleToggleFavourite}
+                  onCookMeal={handleCookMeal}
                   shoppingSet={shoppingSet}
                   highlighted={activeHighlight === meal.id}
                   cardRef={(el) => {

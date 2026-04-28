@@ -29,6 +29,7 @@ export default function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/shopping" element={<ShoppingListPage />} />
             <Route path="/upload-receipt" element={<UploadReceiptPage />} />
+            <Route path="/cooked-meals" element={<WasteAnalyticsPage />} />
             <Route path="/waste-analytics" element={<WasteAnalyticsPage />} />
           </Route>
         </Route>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getUserProfile } from '../../lib/auth'
+import { getCookedMeals, subscribeCookedMeals, summarizeCookedMeals } from '../../shared/cookedMeals'
 
 const EASE = [0.22, 1, 0.36, 1]
 const SETTINGS_KEY = 'profile_settings'
@@ -31,8 +32,6 @@ const mockShoppingItems = [
   { id: 4, name: 'Cherry Tomatoes' },
 ]
 const mockShoppingTotalCount = 8
-
-const mockCarbonKg = 2.4
 
 const mockTips = [
   {
@@ -117,11 +116,13 @@ export default function DashboardPage() {
   const wasteSectionRef = useRef(null)
   const [userName, setUserName] = useState(() => getUserProfile()?.name || 'Trolley Member')
   const [settings, setSettings] = useState(loadSettings)
+  const [wasteSummary, setWasteSummary] = useState(() => summarizeCookedMeals(getCookedMeals()))
 
   useEffect(() => {
     const syncSnapshot = () => {
       setUserName(getUserProfile()?.name || 'Trolley Member')
       setSettings(loadSettings())
+      setWasteSummary(summarizeCookedMeals(getCookedMeals()))
     }
 
     syncSnapshot()
@@ -132,6 +133,13 @@ export default function DashboardPage() {
       window.removeEventListener('profile-updated', syncSnapshot)
       window.removeEventListener('focus', syncSnapshot)
     }
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeCookedMeals((meals) => {
+      setWasteSummary(summarizeCookedMeals(meals))
+    })
+    return unsubscribe
   }, [])
 
   const impactCards = [
@@ -289,7 +297,7 @@ export default function DashboardPage() {
               <p className="text-emerald-100/60 text-xs mb-5">From food wasted this week</p>
 
               <div className="mb-1">
-                <span className="text-5xl font-extrabold leading-none">{mockCarbonKg}</span>
+                <span className="text-5xl font-extrabold leading-none">{wasteSummary.wasteCarbon.toFixed(2)}</span>
                 <span className="text-emerald-300 font-semibold ml-1.5">kg</span>
               </div>
               <p className="text-emerald-100/50 text-xs">CO₂ equivalent</p>
@@ -318,11 +326,58 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.6, ease: EASE }}
-          className="rounded-[2rem] border-2 border-dashed border-outline-variant/30 bg-surface-container-lowest/50 p-10 text-center"
+          className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm"
         >
-          <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3 block">bar_chart</span>
-          <h3 className="font-bold text-on-surface-variant/50 text-lg mb-1">Waste Summary</h3>
-          <p className="text-on-surface-variant/40 text-sm">Coming soon — weekly waste trends and insights</p>
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/60 font-bold mb-2">Waste Summary</p>
+              <h3 className="text-2xl font-extrabold text-emerald-950">Connected to Waste Analytics</h3>
+              <p className="text-sm text-emerald-800/70 mt-1">This updates whenever you log Eat or Waste on the waste tracking page.</p>
+            </div>
+            <Link
+              to="/waste-analytics"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:gap-2 transition-all"
+            >
+              Open waste page
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+            <SnapshotCard title="Meals tracked" value={`${wasteSummary.totalMeals}`} icon="skillet" />
+            <SnapshotCard title="Eaten" value={`${wasteSummary.eaten}g`} icon="restaurant" />
+            <SnapshotCard title="Wasted" value={`${wasteSummary.wasted}g`} icon="delete" />
+            <SnapshotCard title="Leftovers" value={`${wasteSummary.leftovers}g`} icon="inventory_2" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-[1.5rem] bg-red-50 border border-red-100 p-5">
+              <p className="text-[11px] uppercase tracking-widest text-red-500 font-bold mb-2">Estimated loss</p>
+              <div className="flex items-end gap-4">
+                <div>
+                  <p className="text-3xl font-extrabold text-red-600">${wasteSummary.wasteCost.toFixed(2)}</p>
+                  <p className="text-xs text-red-500/80 mt-1">Value lost through wasted food</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-extrabold text-red-600">{wasteSummary.wasteCarbon.toFixed(2)} kg</p>
+                  <p className="text-xs text-red-500/80 mt-1">Estimated CO₂e impact</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] bg-emerald-50 border border-emerald-100 p-5">
+              <p className="text-[11px] uppercase tracking-widest text-emerald-700 font-bold mb-2">Current status</p>
+              <p className="text-3xl font-extrabold text-emerald-950">{wasteSummary.activeMeals}</p>
+              <p className="text-xs text-emerald-700/75 mt-1">Meals still active in your waste tracking flow</p>
+              <div className="mt-4 h-2.5 w-full rounded-full overflow-hidden bg-white">
+                <div className="h-full flex">
+                  <div className="bg-emerald-600" style={{ width: `${wasteSummary.totalMeals ? (wasteSummary.eaten / Math.max(wasteSummary.eaten + wasteSummary.wasted + wasteSummary.leftovers, 1)) * 100 : 0}%` }} />
+                  <div className="bg-lime-400" style={{ width: `${wasteSummary.totalMeals ? (wasteSummary.leftovers / Math.max(wasteSummary.eaten + wasteSummary.wasted + wasteSummary.leftovers, 1)) * 100 : 0}%` }} />
+                  <div className="bg-red-400" style={{ width: `${wasteSummary.totalMeals ? (wasteSummary.wasted / Math.max(wasteSummary.eaten + wasteSummary.wasted + wasteSummary.leftovers, 1)) * 100 : 0}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         <motion.div
