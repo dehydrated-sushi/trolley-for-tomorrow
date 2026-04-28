@@ -1,129 +1,590 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../../lib/api'
-import CategoryTag from '../../shared/CategoryTag'
-import NutritionLegend from '../../shared/NutritionLegend'
 import { toast } from '../../shared/toastBus'
-import { CATEGORY_FALLBACK, getCategoryInfo } from '../../shared/nutrition'
-import ManualAddModal from './ManualAddModal'
-import ARScanModal from './ARScanModal'
 
 const EASE = [0.22, 1, 0.36, 1]
 const UNDO_MS = 4000
-const HIGH_CONFIDENCE_MATCH = 0.9
 
-function normaliseFridgeName(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\b(ww|woolworths|coles|aldi|iga|rspca)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+// ── Category config ───────────────────────────────────────────────────────────
+
+const CATEGORIES = {
+  protein:      { label: 'Protein',       icon: 'egg',           bg: '#e0f2fe', colour: '#0369a1' },
+  vegetables:   { label: 'Vegetables',    icon: 'eco',           bg: '#dcfce7', colour: '#15803d' },
+  fruits:       { label: 'Fruits',        icon: 'nutrition',     bg: '#fce7f3', colour: '#be185d' },
+  grains:       { label: 'Grains & Carbs',icon: 'grain',         bg: '#fef9c3', colour: '#a16207' },
+  healthy_fats: { label: 'Healthy Fats',  icon: 'water_drop',    bg: '#ede9fe', colour: '#6d28d9' },
+  beverages:    { label: 'Beverages',     icon: 'local_cafe',    bg: '#dbeafe', colour: '#1d4ed8' },
+  other:        { label: 'Other',         icon: 'category',      bg: '#f1f5f9', colour: '#475569' },
 }
 
-function groupKeyForItem(item) {
-  const matched = normaliseFridgeName(item.matched_name)
-  const score = Number(item.match_score)
-  if (matched && Number.isFinite(score) && score >= HIGH_CONFIDENCE_MATCH) {
-    return `match:${matched}`
-  }
-  const name = normaliseFridgeName(item.name)
-  return name ? `name:${name}` : `id:${item.id}`
+function getCat(key) {
+  return CATEGORIES[key] || CATEGORIES.other
 }
 
-function parseQty(value) {
-  const raw = String(value ?? '1').trim()
-  const match = raw.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/)
-  if (!match) return null
-  return {
-    value: Number(match[1]),
-    unit: (match[2] || 'each').toLowerCase(),
-  }
+// ── Expiry helpers ────────────────────────────────────────────────────────────
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const exp = new Date(dateStr); exp.setHours(0,0,0,0)
+  return Math.round((exp - today) / 86400000)
 }
 
-function combineQty(items) {
-  const parsed = items.map((item) => parseQty(item.qty))
-  if (parsed.some((qty) => !qty)) {
-    return items.length === 1 ? (items[0].qty ?? '1') : `${items.length} items`
-  }
-
-  const unit = parsed[0].unit
-  if (parsed.some((qty) => qty.unit !== unit)) {
-    return `${items.length} items`
-  }
-
-  const total = parsed.reduce((sum, qty) => sum + qty.value, 0)
-  const rounded = Number.isInteger(total) ? String(total) : total.toFixed(2).replace(/\.?0+$/, '')
-  return unit === 'each' ? rounded : `${rounded} ${unit}`
+function ExpiryPill({ dateStr }) {
+  const days = daysUntil(dateStr)
+  if (days === null) return null
+  if (days < 0)  return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Expired</span>
+  if (days === 0) return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Today</span>
+  if (days <= 3)  return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{days}d left</span>
+  return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{days}d left</span>
 }
 
-function groupFridgeItems(rawItems) {
-  const groups = new Map()
+// ── Legend popup ──────────────────────────────────────────────────────────────
 
-  for (const item of rawItems) {
-    if (item._pendingDelete) {
-      groups.set(`pending:${item.id}`, [item])
-      continue
-    }
-    const key = groupKeyForItem(item)
-    const group = groups.get(key) || []
-    group.push(item)
-    groups.set(key, group)
-  }
+function LegendButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-container-high text-on-surface-variant text-sm font-semibold hover:bg-surface-container-highest transition-colors"
+      >
+        <span className="material-symbols-outlined text-base">info</span>
+        Legend
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -8 }}
+              transition={{ duration: 0.2, ease: EASE }}
+              className="absolute right-0 top-12 z-40 w-72 bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/10 p-5"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-on-surface">Nutritional Categories</h3>
+                <button onClick={() => setOpen(false)}>
+                  <span className="material-symbols-outlined text-on-surface-variant text-xl">close</span>
+                </button>
+              </div>
+              <p className="text-xs text-on-surface-variant mb-4">Every ingredient is tagged with one nutritional category.</p>
+              <div className="space-y-3">
+                {Object.entries(CATEGORIES).map(([key, cat]) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <span
+                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: cat.bg }}
+                    >
+                      <span className="material-symbols-outlined text-sm" style={{ color: cat.colour }}>{cat.icon}</span>
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-on-surface leading-tight">{cat.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
-  return Array.from(groups.values()).map((group) => {
-    const sorted = [...group].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    const primary = sorted[0]
-    const priceValues = sorted
-      .map((item) => Number(item.price))
-      .filter((price) => Number.isFinite(price))
-    const price = priceValues.length
-      ? Number(priceValues.reduce((sum, value) => sum + value, 0).toFixed(2))
-      : null
+// ── Add item modal (receipt or manual choice) ─────────────────────────────────
 
-    return {
-      ...primary,
-      id: primary.id,
-      item_ids: sorted.map((item) => item.id),
-      grouped_count: sorted.length,
-      grouped_names: Array.from(new Set(sorted.map((item) => item.name).filter(Boolean))),
-      qty: combineQty(sorted),
-      price,
-      _pendingDelete: sorted.every((item) => item._pendingDelete),
-    }
+function AddItemModal({ open, onClose, onCreated }) {
+  const [step, setStep] = useState('choice') // 'choice' | 'manual'
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    name: '', quantity: '1', unit: 'pcs', category: 'other', expiry_date: '', price: '',
   })
+
+  useEffect(() => {
+    if (open) { setStep('choice'); setForm({ name: '', quantity: '1', unit: 'pcs', category: 'other', expiry_date: '', price: '' }) }
+  }, [open])
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return
+    setSaving(true)
+    try {
+      const payload = {
+        name: form.name.trim(),
+        qty: `${form.quantity} ${form.unit}`.trim(),
+        category: form.category,
+        expiry_date: form.expiry_date || null,
+        price: form.price ? parseFloat(form.price) : null,
+      }
+      const data = await apiFetch('/api/fridge/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      onCreated(data.item)
+      onClose()
+    } catch (err) {
+      toast.show({ message: err.message, tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 40 }}
+        transition={{ duration: 0.3, ease: EASE }}
+        className="relative z-10 w-full max-w-md bg-surface-container-lowest rounded-[2rem] p-6 shadow-2xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            {step === 'manual' && (
+              <button onClick={() => setStep('choice')} className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm">arrow_back</span>
+              </button>
+            )}
+            <h2 className="font-bold text-on-surface text-lg">
+              {step === 'choice' ? 'Add Item' : 'Add Manually'}
+            </h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {step === 'choice' && (
+            <motion.div
+              key="choice"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.22, ease: EASE }}
+              className="space-y-3"
+            >
+              <p className="text-sm text-on-surface-variant mb-5">How would you like to add items to your fridge?</p>
+
+              {/* Scan Receipt */}
+              <Link
+                to="/upload-receipt"
+                onClick={onClose}
+                className="flex items-center gap-4 p-5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-900 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+                </div>
+                <div className="flex-grow">
+                  <p className="font-bold text-emerald-900">Scan Receipt</p>
+                  <p className="text-xs text-emerald-700/70">Upload a grocery receipt to auto-add items</p>
+                </div>
+                <span className="material-symbols-outlined text-emerald-600 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </Link>
+
+              {/* Add Manually */}
+              <button
+                onClick={() => setStep('manual')}
+                className="w-full flex items-center gap-4 p-5 rounded-2xl bg-surface-container-high hover:bg-surface-container-highest transition-colors group text-left"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
+                </div>
+                <div className="flex-grow">
+                  <p className="font-bold text-on-surface">Add Manually</p>
+                  <p className="text-xs text-on-surface-variant">Type in item details yourself</p>
+                </div>
+                <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </button>
+            </motion.div>
+          )}
+
+          {step === 'manual' && (
+            <motion.div
+              key="manual"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.22, ease: EASE }}
+              className="space-y-4"
+            >
+              {/* Name */}
+              <div>
+                <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Item Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => set('name', e.target.value)}
+                  placeholder="e.g. Chicken Breast"
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
+                />
+              </div>
+
+              {/* Quantity + Unit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.quantity}
+                    onChange={e => set('quantity', e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Unit</label>
+                  <select
+                    value={form.unit}
+                    onChange={e => set('unit', e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    {['pcs','g','kg','ml','L','cup','tbsp','tsp','pack'].map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Category</label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(CATEGORIES).map(([key, cat]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => set('category', key)}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                      style={{
+                        background: form.category === key ? cat.colour : cat.bg,
+                        color: form.category === key ? '#fff' : cat.colour,
+                        outline: form.category === key ? `2px solid ${cat.colour}` : 'none',
+                      }}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Expiry Date */}
+              <div>
+                <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Expiry Date</label>
+                <input
+                  type="date"
+                  value={form.expiry_date}
+                  onChange={e => set('expiry_date', e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              {/* Price */}
+              <div>
+                <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Price (AUD)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={e => set('price', e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
+                  />
+                </div>
+              </div>
+
+              {/* Save */}
+              <button
+                onClick={handleSave}
+                disabled={!form.name.trim() || saving}
+                className="w-full py-3.5 rounded-xl bg-emerald-900 text-white font-bold text-sm disabled:opacity-40 hover:bg-emerald-800 transition-colors mt-2"
+              >
+                {saving ? 'Saving...' : 'Add to Fridge'}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  )
 }
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+
+function EditModal({ item, onClose, onUpdated }) {
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    name: item.name || '',
+    quantity: item.qty || '1',
+    unit: 'pcs',
+    category: item.category || 'other',
+    expiry_date: item.expiry_date || '',
+    price: item.price != null ? String(item.price) : '',
+  })
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return
+    setSaving(true)
+    try {
+      const payload = {
+        name: form.name.trim(),
+        qty: `${form.quantity} ${form.unit}`.trim(),
+        price: form.price ? parseFloat(form.price) : null,
+      }
+      const data = await apiFetch(`/api/fridge/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      onUpdated(data.item)
+      onClose()
+    } catch (err) {
+      toast.show({ message: err.message, tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+        transition={{ duration: 0.3, ease: EASE }}
+        className="relative z-10 w-full max-w-md bg-surface-container-lowest rounded-[2rem] p-6 shadow-2xl"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-bold text-on-surface text-lg">Edit Item</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Item Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Quantity</label>
+              <input
+                type="number" min="0"
+                value={form.quantity}
+                onChange={e => set('quantity', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Unit</label>
+              <select
+                value={form.unit}
+                onChange={e => set('unit', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {['pcs','g','kg','ml','L','cup','tbsp','tsp','pack'].map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Category</label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(CATEGORIES).map(([key, cat]) => (
+                <button
+                  key={key} type="button"
+                  onClick={() => set('category', key)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                  style={{
+                    background: form.category === key ? cat.colour : cat.bg,
+                    color: form.category === key ? '#fff' : cat.colour,
+                    outline: form.category === key ? `2px solid ${cat.colour}` : 'none',
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Expiry Date</label>
+            <input
+              type="date"
+              value={form.expiry_date}
+              onChange={e => set('expiry_date', e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5 block">Price (AUD)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">$</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={form.price}
+                onChange={e => set('price', e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-8 pr-4 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-on-surface-variant/40"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={!form.name.trim() || saving}
+            className="w-full py-3.5 rounded-xl bg-emerald-900 text-white font-bold text-sm disabled:opacity-40 hover:bg-emerald-800 transition-colors mt-2"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Fridge Item Card ──────────────────────────────────────────────────────────
+
+function FridgeCard({ item, onEdit, onDelete, onUndo }) {
+  const cat = getCat(item.category)
+
+  if (item._pendingDelete) {
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="relative rounded-3xl bg-surface-container-highest/80 flex flex-col items-center justify-center gap-2 p-5 text-center min-h-[200px]"
+      >
+        <p className="text-sm font-semibold text-on-surface">Removed {item.name}</p>
+        <button
+          onClick={() => onUndo(item.id)}
+          className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-on-surface text-surface text-xs font-bold uppercase tracking-widest"
+        >
+          <span className="material-symbols-outlined text-sm">undo</span>
+          Undo
+        </button>
+        <motion.span
+          initial={{ scaleX: 1 }} animate={{ scaleX: 0 }}
+          transition={{ duration: UNDO_MS / 1000, ease: 'linear' }}
+          style={{ transformOrigin: 'left' }}
+          className="absolute bottom-0 left-0 right-0 h-1 bg-primary/60 rounded-b-3xl"
+        />
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.94, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92 }}
+      transition={{ duration: 0.28, ease: EASE }}
+      whileHover={{ y: -4, transition: { type: 'spring', stiffness: 380, damping: 26 } }}
+      className="group bg-surface-container-lowest rounded-3xl p-5 flex flex-col relative hover:shadow-lg transition-shadow"
+    >
+      {/* Action buttons */}
+      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => onEdit(item)}
+          className="w-7 h-7 rounded-full bg-white/90 hover:bg-white shadow-sm flex items-center justify-center"
+        >
+          <span className="material-symbols-outlined text-[15px] text-on-surface">edit</span>
+        </button>
+        <button
+          onClick={() => onDelete(item)}
+          className="w-7 h-7 rounded-full bg-white/90 hover:bg-red-50 hover:text-red-600 shadow-sm flex items-center justify-center"
+        >
+          <span className="material-symbols-outlined text-[15px] text-on-surface">close</span>
+        </button>
+      </div>
+
+      {/* Icon area */}
+      <div
+        className="w-full h-24 rounded-2xl flex items-center justify-center mb-4 relative"
+        style={{ background: cat.bg }}
+      >
+        <span className="material-symbols-outlined text-5xl" style={{ color: cat.colour, fontVariationSettings: "'FILL' 1" }}>
+          {cat.icon}
+        </span>
+        {/* Category pill */}
+        <span
+          className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
+          style={{ background: cat.colour + '22', color: cat.colour }}
+        >
+          {cat.label}
+        </span>
+      </div>
+
+      {/* Content */}
+      <h3 className="font-bold text-on-surface text-base leading-snug mb-1 truncate">{item.name}</h3>
+
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <ExpiryPill dateStr={item.expiry_date} />
+      </div>
+
+      <div className="flex items-center justify-between mt-auto pt-3 border-t border-outline-variant/10">
+        <span className="text-xs text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-lg">
+          {item.qty ?? '1'}
+        </span>
+        {item.price != null && (
+          <span className="text-sm font-bold text-primary">${Number(item.price).toFixed(2)}</span>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Main FridgeView ───────────────────────────────────────────────────────────
 
 export default function FridgeView() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all')
-
+  const [sortBy, setSortBy] = useState('name')
+  const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
-  const [arOpen, setArOpen] = useState(false)
+  const deleteTimers = useMemo(() => new Map(), [])
 
-  // Soft-deleted items: still in `items` for render continuity during the
-  // undo window, but marked with `_pendingDelete` so the card renders as a
-  // collapsing "Undo" bar. Expiry timers are tracked per-id so Undo can
-  // cancel cleanly. On timer fire → DELETE request + hard-remove locally.
-  const deleteTimersRef = useRef(new Map())
-
-  // Flying-card-to-grid ghost — one at a time; adds happen rarely enough
-  // that a fresh add during the previous morph just replaces the ghost.
-  const [morphGhost, setMorphGhost] = useState(null)
-  const gridStartRef = useRef(null) // first grid cell target
-
-  // Add-item button rect (used as origin for the fly-in).
-  const addButtonRef = useRef(null)
-
-  // -- Data load --------------------------------------------------------
-
-  const loadFridge = useCallback(async () => {
-    setLoading(true)
-    setError('')
+  const loadItems = useCallback(async () => {
+    setLoading(true); setError('')
     try {
       const data = await apiFetch('/api/fridge/items')
       setItems(data.items || [])
@@ -134,475 +595,240 @@ export default function FridgeView() {
     }
   }, [])
 
-  useEffect(() => { loadFridge() }, [loadFridge])
+  useEffect(() => { loadItems() }, [loadItems])
 
-  // Cleanup on unmount: fire any pending deletes so mid-window navigation
-  // doesn't leave ghost rows on the backend after a refresh.
-  useEffect(() => () => {
-    const timers = deleteTimersRef.current
-    for (const [, { timer }] of timers) clearTimeout(timer)
-  }, [])
-
-  const groupedItems = useMemo(() => groupFridgeItems(items), [items])
-
+  // Category counts for filter chips
   const categoryCounts = useMemo(() => {
     const c = {}
-    for (const i of groupedItems) {
+    for (const i of items) {
       if (i._pendingDelete) continue
       const k = i.category || 'other'
       c[k] = (c[k] || 0) + 1
     }
     return c
-  }, [groupedItems])
+  }, [items])
 
-  const visible = useMemo(
-    () => (filter === 'all' ? groupedItems : groupedItems.filter((i) => (i.category || 'other') === filter)),
-    [groupedItems, filter],
-  )
-
-  const liveCount = useMemo(() => items.filter((i) => !i._pendingDelete).length, [items])
-  const liveGroupCount = useMemo(
-    () => groupedItems.filter((i) => !i._pendingDelete).length,
-    [groupedItems],
-  )
-
-  // -- Add / edit handlers ---------------------------------------------
-
-  const openAdd = () => {
-    setEditingItem(null)
-    setAddOpen(true)
-  }
-
-  const openEdit = (item) => {
-    if ((item.grouped_count || 1) > 1) return
-    setEditingItem(item)
-    setAddOpen(true)
-  }
-
-  const closeModal = () => {
-    setAddOpen(false)
-    setEditingItem(null)
-  }
-
-  const handleCreated = (item, originRect) => {
-    // Prepend the new item so it's on top; the grid's first cell acts as
-    // the morph target.
-    setItems((prev) => [item, ...prev])
-    // Kick the fly-in animation. Target is measured on the next frame
-    // so the newly-inserted card has a rect; requestAnimationFrame gives
-    // React time to render before we query.
-    requestAnimationFrame(() => {
-      const toEl = gridStartRef.current
-      const toRect = toEl?.getBoundingClientRect?.() || null
-      if (originRect && toRect) {
-        setMorphGhost({
-          id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          item,
-          fromRect: originRect,
-          toRect,
-        })
+  const visible = useMemo(() => {
+    let list = items
+    if (filter !== 'all') list = list.filter(i => (i.category || 'other') === filter)
+    if (search.trim()) list = list.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name)
+      if (sortBy === 'expiry') {
+        const da = daysUntil(a.expiry_date) ?? 9999
+        const db = daysUntil(b.expiry_date) ?? 9999
+        return da - db
       }
+      return 0
     })
+    return list
+  }, [items, filter, search, sortBy])
+
+  const liveCount = items.filter(i => !i._pendingDelete).length
+
+  // Add
+  const handleCreated = (item) => {
+    setItems(prev => [item, ...prev])
     toast.show({ message: `Added ${item.name} to your fridge` })
   }
 
+  // Edit
   const handleUpdated = (item) => {
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...item } : i)))
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...item } : i))
     toast.show({ message: `Updated ${item.name}` })
+    setEditingItem(null)
   }
 
-  // -- Delete with inline undo -----------------------------------------
-
-  const handleRequestDelete = (item) => {
-    const ids = item.item_ids || [item.id]
-    // Mark locally; schedule the real DELETE after the undo window.
-    setItems((prev) =>
-      prev.map((i) => (ids.includes(i.id) ? { ...i, _pendingDelete: true } : i)),
-    )
+  // Delete with undo
+  const handleDelete = (item) => {
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, _pendingDelete: true } : i))
     const timer = setTimeout(async () => {
       try {
-        await Promise.all(ids.map((id) => apiFetch(`/api/fridge/items/${id}`, { method: 'DELETE' })))
-        setItems((prev) => prev.filter((i) => !ids.includes(i.id)))
-      } catch (err) {
-        // Backend rejected — revert local state and tell the user.
-        setItems((prev) =>
-          prev.map((i) => (ids.includes(i.id) ? { ...i, _pendingDelete: false } : i)),
-        )
-        toast.show({ message: `Could not delete ${item.name}`, tone: 'error' })
+        await apiFetch(`/api/fridge/items/${item.id}`, { method: 'DELETE' })
+        setItems(prev => prev.filter(i => i.id !== item.id))
+      } catch {
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, _pendingDelete: false } : i))
+        toast.show({ message: `Could not remove ${item.name}`, tone: 'error' })
       } finally {
-        deleteTimersRef.current.delete(item.id)
+        deleteTimers.delete(item.id)
       }
     }, UNDO_MS)
-    deleteTimersRef.current.set(item.id, { timer, name: item.name, ids })
+    deleteTimers.set(item.id, timer)
   }
 
-  const handleUndoDelete = (itemId) => {
-    const entry = deleteTimersRef.current.get(itemId)
-    if (entry) {
-      clearTimeout(entry.timer)
-      deleteTimersRef.current.delete(itemId)
-    }
-    setItems((prev) =>
-      prev.map((i) => {
-        const ids = entry?.ids || [itemId]
-        return ids.includes(i.id) ? { ...i, _pendingDelete: false } : i
-      }),
-    )
+  const handleUndo = (id) => {
+    const timer = deleteTimers.get(id)
+    if (timer) { clearTimeout(timer); deleteTimers.delete(id) }
+    setItems(prev => prev.map(i => i.id === id ? { ...i, _pendingDelete: false } : i))
   }
-
-  // -- Render -----------------------------------------------------------
 
   return (
-    <div className="px-6 max-w-6xl mx-auto">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-        <div>
-          <h1 className="text-4xl font-extrabold font-headline text-on-surface tracking-tight mb-2">Your Virtual Fridge</h1>
-          <p className="text-on-surface-variant max-w-lg leading-relaxed">
-            {loading
-              ? 'Loading your inventory...'
-              : `Tracking ${liveCount} ${liveCount === 1 ? 'item' : 'items'} in ${liveGroupCount} ${liveGroupCount === 1 ? 'group' : 'groups'}, tagged by nutritional category.`}
-          </p>
-        </div>
-        <div className="flex gap-2 items-center flex-wrap justify-end">
-          <NutritionLegend />
-          <motion.button
-            type="button"
-            onClick={() => setArOpen(true)}
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
-            className="group relative inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-xl bg-white border border-cyan-200 shadow-[0_2px_12px_-4px_rgba(34,211,238,0.28)] text-on-surface font-bold text-sm hover:border-cyan-300 transition-colors"
-            title="Preview — AR fridge scanning, shipping in iteration 2"
-          >
-            <span
-              className="inline-flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.12) 0%, rgba(6,182,212,0.25) 100%)' }}
-            >
-              <span className="material-symbols-outlined text-base" style={{ color: 'rgb(6, 182, 212)' }}>
-                center_focus_strong
-              </span>
-            </span>
-            Scan fridge
-            <span
-              className="text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded-full"
-              style={{ background: 'rgba(34,211,238,0.14)', color: 'rgb(14, 116, 144)' }}
-            >
-              preview
-            </span>
-          </motion.button>
-          <button
-            ref={addButtonRef}
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold px-5 py-2.5 rounded-xl shadow-lg shadow-primary/10 transition-transform active:scale-95 text-sm"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            Add item
-          </button>
-          <Link
-            to="/upload-receipt"
-            className="inline-flex items-center gap-2 bg-surface-container-high text-on-surface font-bold px-5 py-2.5 rounded-xl hover:bg-surface-container-highest transition-colors text-sm"
-          >
-            <span className="material-symbols-outlined text-base">receipt_long</span>
-            Upload receipt
-          </Link>
-        </div>
-      </header>
+    <div className="px-6 md:px-10 max-w-7xl mx-auto pb-12">
 
+      {/* ── Header ── */}
+      <motion.header
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: EASE }}
+        className="mb-8"
+      >
+        <div className="relative overflow-hidden rounded-[2rem] bg-emerald-900 px-8 py-10 md:px-12 text-white shadow-2xl">
+          <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-emerald-700/30 pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-emerald-800/40 pointer-events-none" />
+          <div className="relative z-10 flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <span className="text-emerald-300 font-semibold uppercase tracking-widest text-xs mb-3 block">Your Kitchen</span>
+              <h1 className="text-4xl md:text-5xl font-extrabold mb-2 leading-tight">Virtual Fridge</h1>
+              <p className="text-emerald-100/70 text-base">
+                {loading ? 'Loading...' : `${liveCount} ${liveCount === 1 ? 'item' : 'items'} tracked`}
+              </p>
+            </div>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 bg-white text-emerald-900 font-bold px-6 py-3 rounded-2xl hover:bg-emerald-50 transition-colors shadow-lg"
+            >
+              <span className="material-symbols-outlined">add</span>
+              Add Item
+            </button>
+          </div>
+        </div>
+      </motion.header>
+
+      {/* ── Controls ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.15, ease: EASE }}
+        className="flex flex-col sm:flex-row gap-4 mb-6 items-start sm:items-center justify-between"
+      >
+        {/* Search */}
+        <div className="relative flex-grow max-w-sm">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search items..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40 placeholder:text-on-surface-variant/50"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface text-sm outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            <option value="name">Sort: Name</option>
+            <option value="expiry">Sort: Expiry Date</option>
+          </select>
+
+          {/* Legend */}
+          <LegendButton />
+        </div>
+      </motion.div>
+
+      {/* ── Category filter chips ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.22, ease: EASE }}
+        className="flex flex-wrap gap-2 mb-8"
+      >
+        <button
+          onClick={() => setFilter('all')}
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+            filter === 'all'
+              ? 'bg-emerald-900 text-white'
+              : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+          }`}
+        >
+          All · {liveCount}
+        </button>
+        {Object.entries(CATEGORIES)
+          .filter(([k]) => (categoryCounts[k] || 0) > 0)
+          .map(([key, cat]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(filter === key ? 'all' : key)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-all"
+              style={{
+                background: filter === key ? cat.colour : cat.bg,
+                color: filter === key ? '#fff' : cat.colour,
+              }}
+            >
+              <span className="material-symbols-outlined text-sm">{cat.icon}</span>
+              {cat.label} · {categoryCounts[key]}
+            </button>
+          ))}
+      </motion.div>
+
+      {/* ── States ── */}
       {error && (
-        <div className="mb-8 p-4 rounded-2xl bg-error-container/30 text-error text-sm font-medium">
+        <div className="mb-8 p-4 rounded-2xl bg-red-50 text-red-700 text-sm font-medium border border-red-100">
           Could not load fridge items: {error}
         </div>
       )}
 
       {loading && (
-        <div className="flex items-center justify-center h-64">
-          <p className="text-on-surface-variant animate-pulse text-lg">Loading your fridge...</p>
+        <div className="flex items-center justify-center h-48">
+          <p className="text-on-surface-variant animate-pulse">Loading your fridge...</p>
         </div>
       )}
 
       {!loading && !error && liveCount === 0 && (
         <div className="flex flex-col items-center justify-center h-64 text-center">
-          <span className="material-symbols-outlined text-6xl text-on-surface-variant/20 mb-6">kitchen</span>
+          <span className="material-symbols-outlined text-6xl text-on-surface-variant/20 mb-4">kitchen</span>
           <h3 className="text-xl font-bold text-on-surface mb-2">Your fridge is empty</h3>
-          <p className="text-on-surface-variant mb-6">Add an item manually or upload a receipt to start tracking your ingredients.</p>
-          <div className="flex gap-2 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={openAdd}
-              className="px-7 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold inline-flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined">add</span>
-              Add item
-            </button>
-            <Link to="/upload-receipt" className="px-7 py-3 rounded-xl bg-surface-container-high text-on-surface font-bold">
-              Upload receipt
-            </Link>
-          </div>
+          <p className="text-on-surface-variant mb-6 text-sm">Add items manually or upload a receipt to get started.</p>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-2 bg-emerald-900 text-white font-bold px-6 py-3 rounded-xl"
+          >
+            <span className="material-symbols-outlined">add</span>
+            Add Item
+          </button>
         </div>
       )}
 
+      {/* ── Grid ── */}
       {!loading && liveCount > 0 && (
-        <>
-          {/* Category filter chips */}
-          <section className="mb-8">
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mr-2">Filter:</span>
-              <button
-                type="button"
-                onClick={() => setFilter('all')}
-                className={
-                  filter === 'all'
-                    ? 'px-4 py-1.5 rounded-full bg-primary text-on-primary text-sm font-semibold'
-                    : 'px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-sm font-semibold hover:bg-surface-container-highest'
-                }
-              >
-                All · {liveGroupCount}
-              </button>
-              {Object.keys(CATEGORY_FALLBACK)
-                .filter((k) => (categoryCounts[k] || 0) > 0)
-                .map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setFilter(k)}
-                    className={
-                      filter === k
-                        ? 'px-3 py-1 rounded-full text-sm font-semibold inline-flex items-center gap-2'
-                        : 'px-3 py-1 rounded-full text-sm font-semibold inline-flex items-center gap-2 opacity-60 hover:opacity-100'
-                    }
-                    style={{
-                      backgroundColor: CATEGORY_FALLBACK[k].bg,
-                      color: CATEGORY_FALLBACK[k].colour,
-                    }}
-                  >
-                    <span className="material-symbols-outlined text-sm">{CATEGORY_FALLBACK[k].icon}</span>
-                    {CATEGORY_FALLBACK[k].label} · {categoryCounts[k]}
-                  </button>
-                ))}
-            </div>
-          </section>
-
-          <motion.div
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
-            <AnimatePresence initial={false}>
-              {visible.map((item, idx) => {
-                const info = getCategoryInfo(item.category)
-                const cardRef = idx === 0 ? gridStartRef : undefined
-                return (
-                  <motion.div
-                    key={item.id}
-                    ref={cardRef}
-                    layout
-                    initial={{ opacity: 0, scale: 0.94, y: 8 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.92, y: 4 }}
-                    transition={{ duration: 0.28, ease: EASE }}
-                    className="group bg-surface-container-lowest rounded-3xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-on-surface/5 flex flex-col relative"
-                  >
-                    {/* Undo overlay for items pending deletion */}
-                    <AnimatePresence>
-                      {item._pendingDelete && (
-                        <motion.div
-                          key="undo"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.18 }}
-                          className="absolute inset-0 z-10 rounded-3xl bg-surface-container-highest/95 flex flex-col items-center justify-center gap-2 px-4 text-center"
-                        >
-                          <p className="text-sm font-semibold text-on-surface">Removed {item.name}</p>
-                          <button
-                            type="button"
-                            onClick={() => handleUndoDelete(item.id)}
-                            className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-on-surface text-surface-container-lowest text-xs font-bold uppercase tracking-widest"
-                          >
-                            <span className="material-symbols-outlined text-sm">undo</span>
-                            Undo
-                          </button>
-                          <motion.span
-                            aria-hidden="true"
-                            initial={{ scaleX: 1 }}
-                            animate={{ scaleX: 0 }}
-                            transition={{ duration: UNDO_MS / 1000, ease: 'linear' }}
-                            style={{ transformOrigin: 'left' }}
-                            className="absolute bottom-0 left-0 right-0 h-1 bg-primary/60 rounded-b-3xl"
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Hover action buttons — top-right */}
-                    <div className="absolute top-3 right-3 z-[5] flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      {(item.grouped_count || 1) === 1 && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(item)}
-                          className="w-7 h-7 rounded-full bg-white/90 hover:bg-white text-on-surface flex items-center justify-center shadow-sm"
-                          title={`Edit ${item.name}`}
-                          aria-label={`Edit ${item.name}`}
-                        >
-                          <span className="material-symbols-outlined text-[15px]">edit</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleRequestDelete(item)}
-                        className="w-7 h-7 rounded-full bg-white/90 hover:bg-error/10 hover:text-error text-on-surface flex items-center justify-center shadow-sm"
-                        title={`Remove ${item.name}`}
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        <span className="material-symbols-outlined text-[15px]">close</span>
-                      </button>
-                    </div>
-
-                    <div
-                      className="relative w-full h-28 mb-4 rounded-2xl overflow-hidden flex items-center justify-center"
-                      style={{
-                        background: `linear-gradient(135deg, ${info.bg} 0%, ${info.bg} 60%, ${info.colour}22 100%)`,
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 72, color: info.colour, opacity: 0.85 }}
-                      >
-                        {info.icon}
-                      </span>
-                      <div className="absolute top-3 left-3">
-                        <CategoryTag category={item.category} size="xs" />
-                      </div>
-                    </div>
-                    <div className="px-1">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 className="font-bold text-lg text-on-surface leading-snug">{item.name}</h3>
-                        {(item.grouped_count || 1) > 1 && (
-                          <span className="mt-0.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
-                            {item.grouped_count} similar
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-on-surface-variant mb-3">
-                        Added {new Date(item.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
-                        {(item.grouped_names || []).length > 1 && (
-                          <span className="block truncate mt-0.5">
-                            Includes {item.grouped_names.slice(0, 2).join(', ')}
-                            {item.grouped_names.length > 2 ? ` +${item.grouped_names.length - 2} more` : ''}
-                          </span>
-                        )}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold bg-surface-container px-3 py-1.5 rounded-lg text-on-secondary-container">
-                          Qty: {item.qty ?? 1}
-                        </span>
-                        {item.price != null && (
-                          <span className="text-sm font-bold text-primary">${Number(item.price).toFixed(2)}</span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          </motion.div>
-
-          <section className="mt-20 flex flex-col md:flex-row items-center gap-12 p-12 bg-surface-container rounded-[3rem] relative overflow-hidden">
-            <div className="relative z-10 flex-1">
-              <h2 className="text-3xl font-extrabold font-headline mb-4">Larder Overview</h2>
-              <p className="text-on-surface-variant mb-8 max-w-md leading-relaxed">
-                You have <span className="text-primary font-bold">{liveCount} items</span> in your virtual fridge, spread across {Object.keys(categoryCounts).length} nutritional categories.
-                {liveGroupCount !== liveCount && (
-                  <span> Similar products are grouped into {liveGroupCount} fridge cards.</span>
-                )}
-              </p>
-              <Link to="/meals" className="inline-flex items-center gap-2 primary-gradient text-on-primary px-8 py-3 rounded-xl font-bold shadow-lg">
-                Get Meal Suggestions <span className="material-symbols-outlined">arrow_forward</span>
-              </Link>
-            </div>
-            <div className="relative w-full md:w-1/3 aspect-square bg-white/40 rounded-[2rem] flex items-center justify-center border border-white/20 backdrop-blur-sm">
-              <div className="text-center">
-                <span className="text-6xl font-black text-primary font-headline block">{liveGroupCount}</span>
-                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Fridge Groups</span>
-              </div>
-              <div className="absolute -top-4 -right-4 w-12 h-12 bg-tertiary-container rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-on-tertiary-container">eco</span>
-              </div>
-            </div>
-          </section>
-        </>
+        <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <AnimatePresence initial={false}>
+            {visible.map(item => (
+              <FridgeCard
+                key={item.id}
+                item={item}
+                onEdit={setEditingItem}
+                onDelete={handleDelete}
+                onUndo={handleUndo}
+              />
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
 
-      <ManualAddModal
-        open={addOpen}
-        onClose={closeModal}
-        onCreated={handleCreated}
-        onUpdated={handleUpdated}
-        existingItems={items.filter((i) => !i._pendingDelete)}
-        initialItem={editingItem}
-        buttonOriginRef={addButtonRef}
-      />
+      {/* ── Modals ── */}
+      <AnimatePresence>
+        {addOpen && (
+          <AddItemModal
+            open={addOpen}
+            onClose={() => setAddOpen(false)}
+            onCreated={handleCreated}
+          />
+        )}
+      </AnimatePresence>
 
-      <ARScanModal open={arOpen} onClose={() => setArOpen(false)} />
-
-      {/* Card-fly-to-grid ghost */}
-      <FridgeCardMorph morph={morphGhost} onDone={() => setMorphGhost(null)} />
+      <AnimatePresence>
+        {editingItem && (
+          <EditModal
+            item={editingItem}
+            onClose={() => setEditingItem(null)}
+            onUpdated={handleUpdated}
+          />
+        )}
+      </AnimatePresence>
     </div>
-  )
-}
-
-// ============================================================================
-// FridgeCardMorph
-// ============================================================================
-//
-// Fixed-position motion.div that flies a ghost card from the "Add" button's
-// rect to the first grid cell's rect after a manual add. The real card is
-// already in the grid; the ghost is pure theatre — it teaches the eye that
-// "your save landed there." Fades out at the end so the real card is what
-// the user ends up looking at.
-
-function FridgeCardMorph({ morph, onDone }) {
-  if (!morph) return null
-  const { item, fromRect, toRect } = morph
-  const info = getCategoryInfo(item?.category || 'other')
-  return (
-    <AnimatePresence>
-      <motion.div
-        key={morph.id}
-        initial={{
-          left:    fromRect.left,
-          top:     fromRect.top,
-          width:   fromRect.width,
-          height:  fromRect.height,
-          opacity: 1,
-          scale:   1,
-        }}
-        animate={{
-          left:    toRect.left,
-          top:     toRect.top,
-          width:   toRect.width,
-          height:  toRect.height,
-          opacity: [1, 1, 0],
-          scale:   [1, 1.03, 1],
-        }}
-        transition={{
-          duration: 0.65,
-          ease: EASE,
-          opacity: { times: [0, 0.7, 1], duration: 0.65 },
-          scale:   { times: [0, 0.55, 1], duration: 0.65 },
-        }}
-        onAnimationComplete={onDone}
-        style={{ position: 'fixed', zIndex: 70, pointerEvents: 'none' }}
-        className="rounded-3xl shadow-2xl border border-primary/40 bg-white overflow-hidden flex items-center gap-3 px-4"
-      >
-        <span
-          className="inline-flex items-center justify-center w-8 h-8 rounded-2xl flex-shrink-0"
-          style={{ backgroundColor: info.bg, color: info.colour }}
-        >
-          <span className="material-symbols-outlined text-lg">{info.icon}</span>
-        </span>
-        <span className="font-bold text-sm text-on-surface truncate">{item?.name}</span>
-      </motion.div>
-    </AnimatePresence>
   )
 }

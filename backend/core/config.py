@@ -8,6 +8,7 @@ load_dotenv()
 
 
 def _database_uri():
+    print("DATABASE_URL =", os.environ.get("DATABASE_URL", "NOT FOUND"))
     uri = os.environ["DATABASE_URL"]
     if uri.startswith("sqlite:///") and not uri.startswith("sqlite:////"):
         raw_path = uri.removeprefix("sqlite:///")
@@ -22,6 +23,7 @@ def _database_uri():
         uri = uri.replace("postgres://", "postgresql+psycopg://", 1)
     elif uri.startswith("postgresql://"):
         uri = uri.replace("postgresql://", "postgresql+psycopg://", 1)
+    print("Final URI =", uri)
     return uri
 
 

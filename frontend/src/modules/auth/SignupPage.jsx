@@ -1,140 +1,217 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function SignupPage() {
+  const navigate = useNavigate()
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirm: '',
+  })
+  const [errors, setErrors]   = useState({})
+  const [loading, setLoading] = useState(false)
+  const [agreed, setAgreed]   = useState(false)
+
+  const set = (field, val) => {
+    setForm(p => ({ ...p, [field]: val }))
+    setErrors(p => ({ ...p, [field]: '' }))
+  }
+
+  const validate = () => {
+    const e = {}
+    if (!form.name.trim())     e.name    = 'Name is required'
+    if (!form.email.trim())    e.email   = 'Email is required'
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email'
+    if (!form.password)        e.password = 'Password is required'
+    else if (form.password.length < 8) e.password = 'Password must be at least 8 characters'
+    if (!form.confirm)         e.confirm  = 'Please confirm your password'
+    else if (form.confirm !== form.password) e.confirm = 'Passwords do not match'
+    if (!agreed)               e.agreed   = 'You must agree to the terms'
+    return e
+  }
+
+  const handleSubmit = () => {
+    const e = validate()
+    if (Object.keys(e).length) { setErrors(e); return }
+    setLoading(true)
+    // TODO: connect to auth API
+    setTimeout(() => {
+      setLoading(false)
+      navigate('/dashboard')
+    }, 1000)
+  }
+
+  const strengthLevel = (pw) => {
+    if (!pw) return 0
+    let score = 0
+    if (pw.length >= 8)          score++
+    if (/[A-Z]/.test(pw))        score++
+    if (/[0-9]/.test(pw))        score++
+    if (/[^A-Za-z0-9]/.test(pw)) score++
+    return score
+  }
+
+  const strength = strengthLevel(form.password)
+  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'][strength]
+  const strengthColor = ['', 'bg-red-400', 'bg-amber-400', 'bg-[#5cad76]', 'bg-[#3e7a52]'][strength]
+
   return (
-    <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
-      <header className="fixed top-0 w-full z-50 glass-nav">
-        <div className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
-            <Link to="/" className="font-headline font-extrabold text-2xl tracking-tight text-on-surface">Trolley for Tomorrow</Link>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-sm text-on-surface-variant">
-            <span>Already have an account?</span>
-            <Link className="font-semibold text-primary hover:underline" to="/login">Log in</Link>
-          </div>
+    <div className="min-h-screen bg-[#f4fbf6] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md bg-white border border-[#cce4d6] rounded-2xl shadow-sm overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-[#0f2418] px-8 py-8 text-center">
+          <Link to="/">
+            <span className="font-serif text-2xl text-white tracking-tight">
+              Trolley<span className="text-[#5cad76]"> for Tomorrow</span>
+            </span>
+          </Link>
+          <p className="text-white/40 text-sm font-light mt-2">Create your free account</p>
         </div>
-      </header>
 
-      <main className="flex-grow flex items-center justify-center pt-24 pb-12 px-6">
-        <div className="max-w-6xl w-full grid md:grid-cols-2 gap-12 items-center">
-          {/* Left Side: Editorial Content */}
-          <div className="hidden md:block space-y-8">
-            <div className="space-y-4">
-              <h2 className="font-headline text-5xl font-extrabold leading-tight text-on-surface">
-                Nurture your home, <br />
-                <span className="text-primary">sustainably.</span>
-              </h2>
-              <p className="text-on-surface-variant text-lg max-w-md leading-relaxed">
-                Join Trolley for Tomorrow and transform your grocery shopping into a mindful journey for your budget and the planet.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-surface-container-low p-6 rounded-xl space-y-3">
-                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>kitchen</span>
-                <h3 className="font-headline font-bold text-on-surface">Virtual Fridge</h3>
-                <p className="text-xs text-on-surface-variant">Track inventory effortlessly and reduce food waste by 30%.</p>
-              </div>
-              <div className="bg-surface-container p-6 rounded-xl space-y-3">
-                <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
-                <h3 className="font-headline font-bold text-on-surface">Smart Receipts</h3>
-                <p className="text-xs text-on-surface-variant">Auto-scan your Australian grocery receipts for instant tracking.</p>
-              </div>
-            </div>
-            <div className="relative h-64 w-full rounded-xl overflow-hidden shadow-sm">
-              <img className="w-full h-full object-cover" alt="vibrant organic pantry with glass jars of grains and fresh herbs in soft sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6Y3XY-K-EU_6jLaew4OVRCObBuW-e9qm3Z3rfiGO0255fZVgUaAb4AuQ7Ttho3kfClLjszWmXogsDDCTY8zeeMiNPT-Et4rOwcUyHLbxXw9_4vSqaNfS5yAYkGKvLr08v-wcRSqsUGJFeEGn3itMp7KkmQSN78R9jRAHKM3znYchZGzqlgHh6efxAQf4ZoP6yj1tpFpw5JomrZnp6k4Kqoydsoy7Oapis_BKg_qBNYktjyJ5C_lIfpZwA3W3PbJLP9bzuG6HQKUE" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-6">
-                <p className="text-white font-medium italic">&ldquo;Trolley for Tomorrow turned my kitchen into a sanctuary of organization.&rdquo;</p>
-                <p className="text-white/80 text-xs mt-1">&mdash; Sarah, Melbourne</p>
-              </div>
-            </div>
+        {/* Form */}
+        <div className="px-8 py-8 flex flex-col gap-4">
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-medium text-[#2d4a38] mb-1.5">Full name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              placeholder="Your name"
+              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors
+                ${errors.name ? 'border-red-400 bg-red-50' : 'border-[#cce4d6] focus:border-[#5cad76] bg-white'}`}
+            />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
 
-          {/* Right Side: Registration Form */}
-          <div className="w-full max-w-md mx-auto">
-            <div className="bg-surface-container-lowest p-8 md:p-10 rounded-[2rem] shadow-sm">
-              <div className="mb-8 text-center md:text-left">
-                <h3 className="font-headline text-2xl font-bold text-on-surface">Create your account</h3>
-                <p className="text-on-surface-variant text-sm mt-2">Start your 14-day premium trial today.</p>
-              </div>
-              <form className="space-y-6">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-on-surface-variant ml-1" htmlFor="name">FULL NAME</label>
-                  <div className="relative group">
-                    <input className="w-full bg-surface-container-low border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-on-surface transition-all rounded-t-lg" id="name" placeholder="John Citizen" type="text" />
-                    <div className="absolute bottom-0 left-0 h-0.5 w-0 bg-primary transition-all duration-300 group-focus-within:w-full"></div>
-                  </div>
+          {/* Email */}
+          <div>
+            <label className="block text-xs font-medium text-[#2d4a38] mb-1.5">Email address</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              placeholder="you@example.com"
+              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors
+                ${errors.email ? 'border-red-400 bg-red-50' : 'border-[#cce4d6] focus:border-[#5cad76] bg-white'}`}
+            />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-xs font-medium text-[#2d4a38] mb-1.5">Password</label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={e => set('password', e.target.value)}
+              placeholder="At least 8 characters"
+              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors
+                ${errors.password ? 'border-red-400 bg-red-50' : 'border-[#cce4d6] focus:border-[#5cad76] bg-white'}`}
+            />
+            {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+
+            {/* Password strength bar */}
+            {form.password && (
+              <div className="mt-2">
+                <div className="flex gap-1 mb-1">
+                  {[1,2,3,4].map(i => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-all duration-300
+                        ${i <= strength ? strengthColor : 'bg-[#e8f5ed]'}`}
+                    />
+                  ))}
                 </div>
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-on-surface-variant ml-1" htmlFor="signup-email">EMAIL ADDRESS</label>
-                  <div className="relative group">
-                    <input className="w-full bg-surface-container-low border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-on-surface transition-all rounded-t-lg" id="signup-email" placeholder="hello@larder.au" type="email" />
-                    <div className="absolute bottom-0 left-0 h-0.5 w-0 bg-primary transition-all duration-300 group-focus-within:w-full"></div>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center ml-1">
-                    <label className="block text-xs font-semibold text-on-surface-variant" htmlFor="signup-password">PASSWORD</label>
-                    <span className="text-[10px] text-tertiary font-medium">8+ characters required</span>
-                  </div>
-                  <div className="relative group">
-                    <input className="w-full bg-surface-container-low border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-3 text-on-surface transition-all rounded-t-lg" id="signup-password" placeholder="••••••••" type="password" />
-                    <div className="absolute bottom-0 left-0 h-0.5 w-0 bg-primary transition-all duration-300 group-focus-within:w-full"></div>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                      <span className="material-symbols-outlined text-outline cursor-pointer text-sm">visibility</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 px-1">
-                  <input className="mt-1 rounded-sm border-outline-variant text-primary focus:ring-primary h-4 w-4" id="terms" type="checkbox" />
-                  <label className="text-xs text-on-surface-variant leading-relaxed" htmlFor="terms">
-                    I agree to the <a className="text-primary underline" href="#">Terms of Service</a> and acknowledge the <a className="text-primary underline" href="#">Privacy Policy</a>.
-                  </label>
-                </div>
-                <button className="w-full primary-gradient text-on-primary font-bold py-4 rounded-xl shadow-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2" type="submit">
-                  <span>Register for Trolley for Tomorrow</span>
-                  <span className="material-symbols-outlined">arrow_forward</span>
-                </button>
-                <div className="relative py-4">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-surface-container-high"></div></div>
-                  <div className="relative flex justify-center text-xs"><span className="bg-surface-container-lowest px-4 text-on-surface-variant font-medium">OR REGISTER WITH</span></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <button className="flex items-center justify-center gap-2 bg-surface-container-low py-3 rounded-xl hover:bg-surface-container-high transition-colors text-sm font-medium" type="button">
-                    <img alt="Google" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnud-EtSuL_GgFsCrZvJhPx4jS7PAzGCVKjbJT0aTAfumVEaYZBd2SQdeRUMacPRlSjXNMb22xQS3IfSDby-in1a2UFD4J725eMpgJbSnOn4CX29FZQeIFE_1mjmMHLvkNCkwA6UYeG8NE01hP6GJ5Y0pG0cEBrzd-zTfQVHvME3P2zP97hG16jOojh3bJU1ehw2DD55nsLptSIy4V_BTvIo_5y01CZGbWhmLYmwXCb3i4dSVQswFQvnLyuT5g9g-LVIq6sduXJPU" />
-                    <span>Google</span>
-                  </button>
-                  <button className="flex items-center justify-center gap-2 bg-surface-container-low py-3 rounded-xl hover:bg-surface-container-high transition-colors text-sm font-medium" type="button">
-                    <img alt="Apple" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp5vXehjbmbb0KISxnMhXpMXFWuLpuoyw8EGj9viHO2MEis7RlGNCeHVULAMV9l7bWA9M4XkUXYHn0RZYTJlbjSlRobehkNQwSbo4mcFdsPLOQnlVuc6w60vHL86gSZtZD2jeYahfcDlvDU8Ntj1G9ln7PY-l68UWRtcn-aauVnBQCqdeXza4NKbtcBdQV-JLa5ZCCynet11LbZixdst7JIr1Ppo5ge6B2-J0f378DeP1goYTTV1Ub6O-Wj1k7KevxQFNHU8wGIEg" />
-                    <span>Apple</span>
-                  </button>
-                </div>
-              </form>
-              <div className="mt-8 text-center md:hidden">
-                <p className="text-sm text-on-surface-variant">
-                  Already have an account? <Link className="text-primary font-bold" to="/login">Log in</Link>
+                <p className={`text-xs font-medium
+                  ${strength <= 1 ? 'text-red-500' : strength === 2 ? 'text-amber-600' : 'text-[#3e7a52]'}`}>
+                  {strengthLabel}
                 </p>
               </div>
-            </div>
+            )}
           </div>
-        </div>
-      </main>
 
-      <footer className="w-full py-12 px-6 mt-auto bg-emerald-900 text-emerald-50 text-xs uppercase tracking-widest border-t border-emerald-800/30">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-4">
-            <span className="font-black text-emerald-100">Trolley for Tomorrow</span>
-            <span className="hidden md:inline opacity-30">|</span>
-            <p className="normal-case tracking-normal opacity-80">&copy; 2024 Trolley for Tomorrow. Nurturing Australian Kitchens.</p>
+          {/* Confirm password */}
+          <div>
+            <label className="block text-xs font-medium text-[#2d4a38] mb-1.5">Confirm password</label>
+            <input
+              type="password"
+              value={form.confirm}
+              onChange={e => set('confirm', e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              placeholder="Re-enter your password"
+              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors
+                ${errors.confirm ? 'border-red-400 bg-red-50' : 'border-[#cce4d6] focus:border-[#5cad76] bg-white'}`}
+            />
+            {errors.confirm && <p className="text-xs text-red-500 mt-1">{errors.confirm}</p>}
           </div>
-          <div className="flex gap-6">
-            <a className="text-emerald-400 hover:text-emerald-100 transition-opacity" href="#">Privacy Policy</a>
-            <a className="text-emerald-400 hover:text-emerald-100 transition-opacity" href="#">Support</a>
-            <a className="text-emerald-400 hover:text-emerald-100 transition-opacity" href="#">Feedback</a>
-            <a className="text-emerald-400 hover:text-emerald-100 transition-opacity" href="#">Community Guidelines</a>
+
+          {/* Terms */}
+          <div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => { setAgreed(e.target.checked); setErrors(p => ({ ...p, agreed: '' })) }}
+                className="mt-0.5 w-4 h-4 accent-[#5cad76] flex-shrink-0"
+              />
+              <span className="text-sm text-[#5a7a68] font-light leading-relaxed">
+                I agree to the{' '}
+                <Link to="/terms" className="text-[#3e7a52] underline underline-offset-2">Terms of Service</Link>
+                {' '}and{' '}
+                <Link to="/privacy" className="text-[#3e7a52] underline underline-offset-2">Privacy Policy</Link>
+              </span>
+            </label>
+            {errors.agreed && <p className="text-xs text-red-500 mt-1">{errors.agreed}</p>}
           </div>
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className={`w-full py-3.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 mt-1
+              ${loading
+                ? 'bg-[#cce4d6] text-[#5a7a68] cursor-not-allowed'
+                : 'bg-[#1e3d2a] text-white hover:bg-[#2d5a3d] hover:-translate-y-px'
+              }`}
+          >
+            {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {loading ? 'Creating account…' : 'Create free account'}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-[#e8f5ed]" />
+            <span className="text-xs text-[#5a7a68]">or</span>
+            <div className="flex-1 h-px bg-[#e8f5ed]" />
+          </div>
+
+          {/* Google SSO placeholder */}
+          <button className="w-full py-3 rounded-xl border border-[#cce4d6] text-sm text-[#2d4a38] font-medium hover:bg-[#f4fbf6] hover:border-[#5cad76] transition-all flex items-center justify-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </button>
         </div>
-      </footer>
+
+        {/* Footer */}
+        <div className="px-8 pb-8 text-center">
+          <p className="text-sm text-[#5a7a68]">
+            Already have an account?{' '}
+            <Link to="/login" className="text-[#3e7a52] font-medium hover:text-[#2d5a3d] transition-colors">
+              Sign in
+            </Link>
+          </p>
+        </div>
+
+      </div>
     </div>
   )
 }
