@@ -3,7 +3,9 @@ import os
 import pkgutil
 
 from dotenv import load_dotenv
-load_dotenv()  # 必须在其他 import 之前
+
+# Load .env before app config/extensions
+load_dotenv()
 
 from flask import Flask, jsonify
 from flask_bcrypt import Bcrypt
@@ -20,8 +22,6 @@ from routes.receipt_routes import receipt_bp
 from routes.recipe_routes import recipe_bp
 
 
-
-
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -31,17 +31,26 @@ def create_app():
     jwt.init_app(app)
     limiter.init_app(app)
     Bcrypt(app)
-    
-    CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-        ]
-    }
-})
+
+    # CORS config: read from CORS_ORIGINS env variable
+    cors_origins = [
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
+        ).split(",")
+        if origin.strip()
+    ]
+
+    CORS(
+        app,
+        origins=cors_origins,
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    )
+
+    print("CORS origins:", cors_origins)
 
     # Register error handlers
     register_error_handlers(app)
@@ -82,7 +91,7 @@ def create_app():
             routes.append({
                 "endpoint": rule.endpoint,
                 "methods": sorted(list(rule.methods)),
-                "route": str(rule)
+                "route": str(rule),
             })
         return jsonify({"routes": routes}), 200
 
@@ -92,13 +101,10 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    # Port 5000 on macOS is grabbed by AirPlay Receiver by default, so we use 5001.
+    # Port 5000 on macOS can be used by AirPlay Receiver, so default to 5001 locally.
     port = int(os.environ.get("PORT", 5001))
     app.run(
         host="127.0.0.1",
         port=port,
         debug=os.environ.get("FLASK_ENV") == "development",
-        
-
-
     )
