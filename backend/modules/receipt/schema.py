@@ -66,6 +66,7 @@ class ReceiptItem(db.Model):
     match_score = db.Column(db.Float, nullable=True)
     qty = db.Column(db.String(50), nullable=False, default="1")
     price = db.Column(db.Float, nullable=True)
+    expiry_date = db.Column(db.Date, nullable=True)
 
     created_at = db.Column(
         db.DateTime,
@@ -87,5 +88,6 @@ class ReceiptItem(db.Model):
             "match_score": self.match_score,
             "qty": self.qty,
             "price": self.price,
+            "expiry_date": self.expiry_date.isoformat() if self.expiry_date else None,
             "created_at": self.created_at.isoformat()
         }

@@ -57,6 +57,10 @@ def _normalise_item(raw):
 
     item = {"name": name, "qty": qty, "price": price}
 
+    expiry_date = raw.get("expiry_date")
+    if expiry_date not in (None, ""):
+        item["expiry_date"] = expiry_date
+
     matched_name = str(raw.get("matched_name") or "").strip()
     if matched_name:
         item["matched_name"] = matched_name

@@ -27,9 +27,28 @@ function getCat(key) {
 
 function daysUntil(dateStr) {
   if (!dateStr) return null
+  const parsed = parseDateOnly(dateStr)
+  if (!parsed) return null
   const today = new Date(); today.setHours(0,0,0,0)
-  const exp = new Date(dateStr); exp.setHours(0,0,0,0)
+  const exp = parsed; exp.setHours(0,0,0,0)
   return Math.round((exp - today) / 86400000)
+}
+
+function parseDateOnly(dateStr) {
+  if (!dateStr) return null
+  const [year, month, day] = String(dateStr).split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
+function formatExpiryDate(dateStr) {
+  const date = parseDateOnly(dateStr)
+  if (!date) return ''
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
 }
 
 function ExpiryPill({ dateStr }) {
@@ -350,6 +369,7 @@ function EditModal({ item, onClose, onUpdated }) {
       const payload = {
         name: form.name.trim(),
         qty: `${form.quantity} ${form.unit}`.trim(),
+        expiry_date: form.expiry_date || null,
         price: form.price ? parseFloat(form.price) : null,
       }
       const data = await apiFetch(`/api/fridge/items/${item.id}`, {
@@ -481,6 +501,7 @@ function EditModal({ item, onClose, onUpdated }) {
 
 function FridgeCard({ item, onEdit, onDelete, onUndo }) {
   const cat = getCat(item.category)
+  const expiryDateLabel = formatExpiryDate(item.expiry_date)
 
   if (item._pendingDelete) {
     return (
@@ -554,8 +575,18 @@ function FridgeCard({ item, onEdit, onDelete, onUndo }) {
       {/* Content */}
       <h3 className="font-bold text-on-surface text-base leading-snug mb-1 truncate">{item.name}</h3>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <ExpiryPill dateStr={item.expiry_date} />
+      <div className="flex items-center gap-2 mb-3 flex-wrap min-h-[24px]">
+        {expiryDateLabel ? (
+          <>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-on-surface-variant">
+              <span className="material-symbols-outlined text-sm">event</span>
+              Expires {expiryDateLabel}
+            </span>
+            <ExpiryPill dateStr={item.expiry_date} />
+          </>
+        ) : (
+          <span className="text-xs text-on-surface-variant">No expiry date</span>
+        )}
       </div>
 
       <div className="flex items-center justify-between mt-auto pt-3 border-t border-outline-variant/10">

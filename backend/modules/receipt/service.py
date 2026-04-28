@@ -1,9 +1,27 @@
+from datetime import date, datetime
+
 from core.database import db
+from modules.receipt.expiry_reference import estimate_expiry_date
 from modules.receipt.schema import Receipt, ReceiptItem
 from sqlalchemy import inspect, text
 
 
 PARSER_VERSION = "receipt_ocr_v1"
+
+
+def normalise_expiry_date(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    try:
+        return datetime.strptime(text_value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("expiry_date must be in YYYY-MM-DD format") from exc
 
 
 def ensure_receipt_session_schema():
@@ -29,6 +47,8 @@ def ensure_receipt_session_schema():
             conn.execute(text("ALTER TABLE receipt_items ADD COLUMN matched_name TEXT"))
         if "match_score" not in columns:
             conn.execute(text("ALTER TABLE receipt_items ADD COLUMN match_score DOUBLE PRECISION"))
+        if "expiry_date" not in columns:
+            conn.execute(text("ALTER TABLE receipt_items ADD COLUMN expiry_date DATE"))
 
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id "
@@ -133,6 +153,9 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
         matched_name = str(item.get("matched_name") or "").strip() or None
         match_score = item.get("match_score", None)
         price = item.get("price", None)
+        expiry_date = normalise_expiry_date(item.get("expiry_date"))
+        if expiry_date is None:
+            expiry_date = estimate_expiry_date(name, matched_name=matched_name)
 
         try:
             price = float(price) if price not in [None, ""] else None
@@ -153,6 +176,7 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
             match_score=match_score,
             qty=qty,
             price=price,
+            expiry_date=expiry_date,
         )
         db.session.add(receipt_item)
         saved_models.append(receipt_item)
@@ -163,7 +187,8 @@ def save_receipt_items(items, receipt_filename, receipt_path, receipt_id=None, u
             "matched_name": matched_name,
             "match_score": match_score,
             "qty": qty,
-            "price": price
+            "price": price,
+            "expiry_date": expiry_date.isoformat() if expiry_date else None,
         })
 
     receipt.item_count = len(saved_items)
