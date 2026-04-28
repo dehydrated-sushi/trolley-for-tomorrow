@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS receipt_items (
     match_score REAL,
     qty TEXT,
     price REAL,
+    expiry_date TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
@@ -91,6 +92,8 @@ if "matched_name" not in receipt_item_columns:
     cursor.execute("ALTER TABLE receipt_items ADD COLUMN matched_name TEXT")
 if "match_score" not in receipt_item_columns:
     cursor.execute("ALTER TABLE receipt_items ADD COLUMN match_score REAL")
+if "expiry_date" not in receipt_item_columns:
+    cursor.execute("ALTER TABLE receipt_items ADD COLUMN expiry_date TEXT")
 
 cursor.execute("""
 CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id

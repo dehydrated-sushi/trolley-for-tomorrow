@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request
 from core.database import db
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from modules.nutrition.classifier import classify
-from modules.receipt.service import ensure_receipt_session_schema
+from modules.receipt.expiry_reference import estimate_expiry_date
+from modules.receipt.service import ensure_receipt_session_schema, normalise_expiry_date
 
 bp = Blueprint("fridge_bp", __name__, url_prefix="/api/fridge")
 
@@ -19,18 +20,48 @@ _MANUAL_PATH = "manual"
 
 def _row_to_dict(row):
     m = dict(row._mapping)
+    if m.get("expiry_date"):
+        expiry_date = m["expiry_date"]
+        m["expiry_date"] = (
+            expiry_date.isoformat()
+            if hasattr(expiry_date, "isoformat")
+            else str(expiry_date)
+        )
+        m["expiry_estimated"] = False
+    else:
+        base_date = _date_from_value(m.get("created_at"))
+        expiry_date = estimate_expiry_date(
+            m.get("name") or "",
+            matched_name=m.get("matched_name"),
+            today=base_date,
+        )
+        m["expiry_date"] = expiry_date.isoformat() if expiry_date else None
+        m["expiry_estimated"] = expiry_date is not None
     if not m.get("category"):
         m["category"] = classify(m.get("name") or "")
     return m
+
+
+def _date_from_value(value):
+    if not value:
+        return None
+    if hasattr(value, "date"):
+        return value.date()
+    try:
+        return normalise_expiry_date(str(value)[:10])
+    except ValueError:
+        return None
 
 
 @bp.route("/items", methods=["GET"])
 def get_fridge_items():
     try:
         ensure_receipt_session_schema()
+        has_known_ingredients = inspect(db.engine).has_table("known_ingredients")
         # LEFT JOIN known_ingredients to get pre-classified category.
         # Fallback to on-the-fly classification if not seeded yet.
-        result = db.session.execute(text("""
+        if has_known_ingredients:
+            sql = """
             SELECT
                 r.id,
                 r.name,
@@ -38,13 +69,31 @@ def get_fridge_items():
                 r.match_score,
                 r.qty,
                 r.price,
+                r.expiry_date,
                 r.created_at,
                 ki.category AS category
             FROM receipt_items r
             LEFT JOIN known_ingredients ki
               ON LOWER(TRIM(COALESCE(r.matched_name, r.name))) = LOWER(ki.ingredient_name)
             ORDER BY r.created_at DESC
-        """))
+            """
+        else:
+            sql = """
+            SELECT
+                r.id,
+                r.name,
+                r.matched_name,
+                r.match_score,
+                r.qty,
+                r.price,
+                r.expiry_date,
+                r.created_at,
+                NULL AS category
+            FROM receipt_items r
+            ORDER BY r.created_at DESC
+            """
+
+        result = db.session.execute(text(sql))
 
         rows = [_row_to_dict(row) for row in result]
         return jsonify({"items": rows}), 200
@@ -79,21 +128,28 @@ def create_fridge_item():
             except (TypeError, ValueError):
                 return jsonify({"error": "Price must be a number"}), 400
 
+        try:
+            expiry_date = normalise_expiry_date(payload.get("expiry_date"))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        if expiry_date is None:
+            expiry_date = estimate_expiry_date(name)
+
         inserted = db.session.execute(text("""
-            INSERT INTO receipt_items (receipt_filename, receipt_path, name, qty, price)
-            VALUES (:fname, :fpath, :name, :qty, :price)
-            RETURNING id, name, qty, price, created_at
+            INSERT INTO receipt_items (receipt_filename, receipt_path, name, qty, price, expiry_date)
+            VALUES (:fname, :fpath, :name, :qty, :price, :expiry_date)
+            RETURNING id, name, qty, price, expiry_date, created_at
         """), {
             "fname": _MANUAL_FILENAME,
             "fpath": _MANUAL_PATH,
             "name":  name,
             "qty":   qty,
             "price": price,
+            "expiry_date": expiry_date,
         }).fetchone()
         db.session.commit()
 
-        row = dict(inserted._mapping)
-        row["category"] = classify(name)
+        row = _row_to_dict(inserted)
         return jsonify({"item": row}), 201
 
     except Exception as e:
@@ -137,6 +193,17 @@ def update_fridge_item(item_id):
                 except (TypeError, ValueError):
                     return jsonify({"error": "Price must be a number"}), 400
 
+        if "expiry_date" in payload:
+            try:
+                expiry_date = normalise_expiry_date(payload.get("expiry_date"))
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+            if expiry_date is None:
+                sets.append("expiry_date = NULL")
+            else:
+                sets.append("expiry_date = :expiry_date")
+                params["expiry_date"] = expiry_date
+
         if not sets:
             return jsonify({"error": "No updatable fields supplied"}), 400
 
@@ -144,7 +211,7 @@ def update_fridge_item(item_id):
             UPDATE receipt_items
             SET {', '.join(sets)}
             WHERE id = :id
-            RETURNING id, name, qty, price, created_at
+            RETURNING id, name, qty, price, expiry_date, created_at
         """
         updated = db.session.execute(text(stmt), params).fetchone()
         if not updated:
@@ -152,8 +219,7 @@ def update_fridge_item(item_id):
             return jsonify({"error": "Item not found"}), 404
         db.session.commit()
 
-        row = dict(updated._mapping)
-        row["category"] = classify(row.get("name") or "")
+        row = _row_to_dict(updated)
         return jsonify({"item": row}), 200
 
     except Exception as e:
