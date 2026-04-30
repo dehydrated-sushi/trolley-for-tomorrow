@@ -590,9 +590,16 @@ function FridgeCard({ item, onEdit, onDelete, onUndo }) {
       </div>
 
       <div className="flex items-center justify-between mt-auto pt-3 border-t border-outline-variant/10">
-        <span className="text-xs text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-lg">
-          {item.qty ?? '1'}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+          <span className="text-xs text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-lg">
+            {item.qty ?? '1'}
+          </span>
+          {item.duplicate_count > 1 && (
+            <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-amber-50 text-amber-800">
+              {item.duplicate_count} batches
+            </span>
+          )}
+        </div>
         {item.price != null && (
           <span className="text-sm font-bold text-primary">${Number(item.price).toFixed(2)}</span>
         )}
@@ -659,7 +666,7 @@ export default function FridgeView() {
 
   // Add
   const handleCreated = (item) => {
-    setItems(prev => [item, ...prev])
+    loadItems()
     toast.show({ message: `Added ${item.name} to your fridge` })
   }
 
@@ -675,7 +682,8 @@ export default function FridgeView() {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, _pendingDelete: true } : i))
     const timer = setTimeout(async () => {
       try {
-        await apiFetch(`/api/fridge/items/${item.id}`, { method: 'DELETE' })
+        const duplicateQuery = item.duplicate_count > 1 ? '?duplicates=true' : ''
+        await apiFetch(`/api/fridge/items/${item.id}${duplicateQuery}`, { method: 'DELETE' })
         setItems(prev => prev.filter(i => i.id !== item.id))
       } catch {
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, _pendingDelete: false } : i))
