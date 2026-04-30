@@ -14,6 +14,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 RECIPES_CSV = BASE_DIR / "data" / "processed" / "recipes_clean.csv"
 KNOWN_CSV = BASE_DIR / "data" / "processed" / "known_ingredients.csv"
 FOOD_REFERENCE_CSV = BASE_DIR / "data" / "processed" / "food_reference.csv"
+RECIPE_PORTION_INGREDIENTS_CSV = BASE_DIR / "data" / "processed" / "recipe_portion_ingredients.csv"
 
 FOOD_REFERENCE_COLUMNS = [
     "ingredient_name",
@@ -71,6 +72,36 @@ FOOD_REFERENCE_INTEGER_COLUMNS = {
     "refrigerate_max_days",
     "freeze_min_days",
     "freeze_max_days",
+}
+
+RECIPE_PORTION_INGREDIENT_COLUMNS = [
+    "recipe_id",
+    "recipe_name",
+    "ingredient_position",
+    "ingredient_name",
+    "matched_food_name",
+    "canonical_name",
+    "category",
+    "grams_per_portion",
+    "kcal_per_100g",
+    "kcal_per_portion",
+    "nutrition_source",
+    "gram_basis",
+    "calorie_scale_factor",
+    "weight_confidence",
+    "price_lookup_key",
+]
+
+RECIPE_PORTION_INTEGER_COLUMNS = {
+    "recipe_id",
+    "ingredient_position",
+}
+
+RECIPE_PORTION_FLOAT_COLUMNS = {
+    "calorie_scale_factor",
+    "grams_per_portion",
+    "kcal_per_100g",
+    "kcal_per_portion",
 }
 
 load_dotenv(BASE_DIR / ".env")
@@ -207,6 +238,29 @@ def create_tables():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS waste_events (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER DEFAULT 1,
+        receipt_item_id INTEGER,
+        recipe_id INTEGER,
+        recipe_name TEXT,
+        item_name TEXT NOT NULL,
+        category TEXT,
+        event_type TEXT NOT NULL,
+        quantity_grams DOUBLE PRECISION DEFAULT 0,
+        quantity_label TEXT,
+        cost_impact DOUBLE PRECISION DEFAULT 0,
+        reason TEXT,
+        event_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_waste_events_event_date
+        ON waste_events (event_date);
+
+    CREATE INDEX IF NOT EXISTS idx_waste_events_type
+        ON waste_events (event_type);
+
     CREATE TABLE IF NOT EXISTS food_reference (
         ingredient_name TEXT PRIMARY KEY,
         canonical_name TEXT,
@@ -238,6 +292,32 @@ def create_tables():
         freeze_min_days INTEGER,
         freeze_max_days INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS recipe_portion_ingredients (
+        id SERIAL PRIMARY KEY,
+        recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
+        recipe_name TEXT NOT NULL,
+        ingredient_position INTEGER NOT NULL,
+        ingredient_name TEXT NOT NULL,
+        matched_food_name TEXT,
+        canonical_name TEXT,
+        category TEXT,
+        grams_per_portion DOUBLE PRECISION,
+        kcal_per_100g DOUBLE PRECISION,
+        kcal_per_portion DOUBLE PRECISION,
+        nutrition_source TEXT,
+        gram_basis TEXT,
+        calorie_scale_factor DOUBLE PRECISION,
+        weight_confidence TEXT,
+        price_lookup_key TEXT,
+        UNIQUE (recipe_id, ingredient_position)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recipe_portion_ingredients_recipe_id
+        ON recipe_portion_ingredients (recipe_id);
+
+    CREATE INDEX IF NOT EXISTS idx_recipe_portion_ingredients_lookup
+        ON recipe_portion_ingredients (price_lookup_key);
     """
 
     with get_connection() as conn:
@@ -268,6 +348,28 @@ def clean_food_reference_value(column, value):
 
     if column in FOOD_REFERENCE_FLOAT_COLUMNS:
         return float(value)
+
+    return value
+
+
+def clean_recipe_portion_value(column, value):
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, str):
+        value = value.strip()
+
+    if value in ("", "nan", "NaN", "None"):
+        return None
+
+    if column in RECIPE_PORTION_INTEGER_COLUMNS:
+        return int(float(value))
+
+    if column in RECIPE_PORTION_FLOAT_COLUMNS:
+        return float(value)
+
+    if column == "scale_was_clipped":
+        return str(value).strip().lower() in ("1", "true", "yes")
 
     return value
 
@@ -526,6 +628,94 @@ def load_food_reference():
     print(f"Food reference rows loaded: {len(rows)}")
 
 
+def _load_csv_rows(path, columns):
+    df = pd.read_csv(path, dtype=str, keep_default_na=False)
+    missing_cols = [column for column in columns if column not in df.columns]
+    if missing_cols:
+        print(f"ERROR: {path.name} is missing columns: {missing_cols}")
+        return None
+    return df[columns]
+
+
+def load_recipe_portion_ingredients():
+    if not RECIPE_PORTION_INGREDIENTS_CSV.exists():
+        print(f"Skipping recipe portion ingredients; missing CSV: {RECIPE_PORTION_INGREDIENTS_CSV}")
+        return
+
+    print(f"Reading recipe portion ingredients from: {RECIPE_PORTION_INGREDIENTS_CSV}")
+    insert_sql = """
+    INSERT INTO recipe_portion_ingredients (
+        recipe_id,
+        recipe_name,
+        ingredient_position,
+        ingredient_name,
+        matched_food_name,
+        canonical_name,
+        category,
+        grams_per_portion,
+        kcal_per_100g,
+        kcal_per_portion,
+        nutrition_source,
+        gram_basis,
+        calorie_scale_factor,
+        weight_confidence,
+        price_lookup_key
+    )
+    VALUES %s
+    ON CONFLICT (recipe_id, ingredient_position) DO UPDATE SET
+        recipe_name = EXCLUDED.recipe_name,
+        ingredient_name = EXCLUDED.ingredient_name,
+        matched_food_name = EXCLUDED.matched_food_name,
+        canonical_name = EXCLUDED.canonical_name,
+        category = EXCLUDED.category,
+        grams_per_portion = EXCLUDED.grams_per_portion,
+        kcal_per_100g = EXCLUDED.kcal_per_100g,
+        kcal_per_portion = EXCLUDED.kcal_per_portion,
+        nutrition_source = EXCLUDED.nutrition_source,
+        gram_basis = EXCLUDED.gram_basis,
+        calorie_scale_factor = EXCLUDED.calorie_scale_factor,
+        weight_confidence = EXCLUDED.weight_confidence,
+        price_lookup_key = EXCLUDED.price_lookup_key;
+    """
+
+    loaded = 0
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM recipe_portion_ingredients;")
+            for chunk in pd.read_csv(
+                RECIPE_PORTION_INGREDIENTS_CSV,
+                dtype=str,
+                keep_default_na=False,
+                chunksize=50000,
+            ):
+                missing_cols = [
+                    column for column in RECIPE_PORTION_INGREDIENT_COLUMNS
+                    if column not in chunk.columns
+                ]
+                if missing_cols:
+                    print(
+                        "ERROR: recipe_portion_ingredients.csv is missing columns: "
+                        f"{missing_cols}"
+                    )
+                    return
+
+                chunk = chunk[RECIPE_PORTION_INGREDIENT_COLUMNS]
+                rows = []
+                for _, row in chunk.iterrows():
+                    rows.append(tuple(
+                        clean_recipe_portion_value(column, row[column])
+                        for column in RECIPE_PORTION_INGREDIENT_COLUMNS
+                    ))
+                execute_values(cur, insert_sql, rows, page_size=1000)
+                loaded += len(rows)
+
+    print(f"Recipe portion ingredient rows loaded: {loaded}")
+
+
+def load_recipe_portions():
+    load_recipe_portion_ingredients()
+
+
 def verify_database():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -538,10 +728,14 @@ def verify_database():
             cur.execute("SELECT COUNT(*) FROM food_reference;")
             food_reference_count = cur.fetchone()[0]
 
+            cur.execute("SELECT COUNT(*) FROM recipe_portion_ingredients;")
+            recipe_portion_ingredient_count = cur.fetchone()[0]
+
     print("Verification:")
     print(f"- recipes: {recipe_count}")
     print(f"- known_ingredients: {ingredient_count}")
     print(f"- food_reference: {food_reference_count}")
+    print(f"- recipe_portion_ingredients: {recipe_portion_ingredient_count}")
 
 
 def parse_args():
@@ -550,6 +744,11 @@ def parse_args():
         "--only-food-reference",
         action="store_true",
         help="Create/update tables and load only backend/data/processed/food_reference.csv.",
+    )
+    parser.add_argument(
+        "--only-recipe-portions",
+        action="store_true",
+        help="Create/update tables and load only recipe_portion_ingredients.csv.",
     )
     return parser.parse_args()
 
@@ -563,10 +762,13 @@ def main():
     create_tables()
     if args.only_food_reference:
         load_food_reference()
+    elif args.only_recipe_portions:
+        load_recipe_portions()
     else:
         load_recipes()
         load_known_ingredients()
         load_food_reference()
+        load_recipe_portions()
     verify_database()
 
     print("AWS RDS PostgreSQL database created and loaded successfully.")
@@ -580,7 +782,9 @@ def main():
     print("- user_favourites")
     print("- shopping_list")
     print("- meal_logs")
+    print("- waste_events")
     print("- food_reference")
+    print("- recipe_portion_ingredients")
 
 
 if __name__ == "__main__":

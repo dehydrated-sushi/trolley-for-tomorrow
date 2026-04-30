@@ -14,7 +14,14 @@ def _ensure_table():
     """Lazily create profile tables on first request."""
     global _TABLE_INITIALISED
     if _TABLE_INITIALISED:
-        return
+        try:
+            db.session.execute(text("SELECT 1 FROM user_preferences LIMIT 1"))
+            db.session.execute(text("SELECT 1 FROM user_budget LIMIT 1"))
+            return
+        except Exception:
+            db.session.rollback()
+            _TABLE_INITIALISED = False
+
     db.session.execute(text("""
         CREATE TABLE IF NOT EXISTS user_budget (
             id INTEGER PRIMARY KEY,

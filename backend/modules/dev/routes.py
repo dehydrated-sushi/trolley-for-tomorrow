@@ -5,6 +5,7 @@ Wipes all USER DATA from the demo database:
   - receipts        (one row per receipt scan/upload session)
   - user_budget     (weekly spending goal)
   - user_preferences (dietary flags)
+  - waste_events    (food waste / cooked / leftover logs)
 
 Does NOT touch:
   - recipes (the 231k recipe catalogue)
@@ -22,7 +23,13 @@ bp = Blueprint("dev_bp", __name__, url_prefix="/api/dev")
 
 # Tables that hold per-user state. Delete child rows before receipt sessions
 # so PostgreSQL foreign keys do not block the reset.
-USER_DATA_TABLES = ("receipt_items", "receipts", "user_budget", "user_preferences")
+USER_DATA_TABLES = (
+    "waste_events",
+    "receipt_items",
+    "receipts",
+    "user_budget",
+    "user_preferences",
+)
 
 
 @bp.route("/reset", methods=["POST"])
