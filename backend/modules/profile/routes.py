@@ -113,9 +113,14 @@ def _ensure_table():
         CREATE TABLE IF NOT EXISTS user_favourites (
             user_id    INTEGER NOT NULL,
             recipe_id  INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (user_id, recipe_id)
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """))
+    # The table may have been created without a PK (e.g. on a shared DB by an
+    # older migration). A unique index satisfies ON CONFLICT just as well.
+    db.session.execute(text("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_user_favourites_unique
+        ON user_favourites (user_id, recipe_id)
     """))
     db.session.commit()
     _TABLE_INITIALISED = True

@@ -5,6 +5,15 @@ Follows semantic versioning as defined in the root README.
 
 ---
 
+## [1.1.1] — 2026-04-30
+
+### Fixed — Favourites ON CONFLICT crash on shared PostgreSQL DB
+
+- `_ensure_table()` now runs `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_favourites_unique ON user_favourites (user_id, recipe_id)` after the `CREATE TABLE IF NOT EXISTS` for `user_favourites`. The shared RDS instance had the table created without a primary key constraint (likely by an older migration path), which caused `ON CONFLICT (user_id, recipe_id) DO NOTHING` to throw `psycopg.errors.InvalidColumnReference`. A unique index satisfies `ON CONFLICT` identically to a composite PK. The index creation is idempotent — safe to run against DBs that already have the PK.
+- Removed `PRIMARY KEY (user_id, recipe_id)` from the `CREATE TABLE` DDL to avoid a conflict if the table already exists without it; the unique index now carries that responsibility.
+
+---
+
 ## [1.1.0] — 2026-04-23
 
 ### Added — Favourite recipes

@@ -19,7 +19,7 @@ dist/
 
 # Data
 data/raw/
-backend/rds-ca.pem
+backend/*.pem
 backend/data/processed/recipes_clean.csv
 backend/data/processed/recipe_portion_ingredients.csv
 backend/data/processed/recipe_portion_summary.csv
