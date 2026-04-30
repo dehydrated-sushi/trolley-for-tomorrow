@@ -1,5 +1,15 @@
 # Core Changelog
 
+## [1.3.1] - 2026-04-30
+
+### Fixed — Local dev setup
+
+- `requirements.txt`: pinned `psycopg[binary]` downgraded from `3.3.3` (does not exist on PyPI) to `3.2.13` (latest available). Previous version caused `pip install` to fail entirely for anyone setting up locally.
+- `backend/global-bundle.pem`: AWS RDS CA bundle copied into `backend/` so the `sslrootcert=global-bundle.pem` relative path in `.env` resolves correctly when running `python app.py` from the `backend/` directory. Without this, local connections to the RDS instance failed with `SSL error: certificate verify failed`.
+- `.env` (local only, not committed): `DATABASE_URL` updated to append `&sslrootcert=global-bundle.pem`; `PIXABAY_API_KEY` added so recipe hero images load on the Meals page instead of falling back to the gradient placeholder.
+
+---
+
 ## [1.3.0] - 2026-04-16
 
 ### Fixed
