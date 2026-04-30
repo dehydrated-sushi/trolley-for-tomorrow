@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, abort, jsonify, request, send_from_directory
 from core.database import db
 from sqlalchemy import text
@@ -14,7 +16,8 @@ from modules.nutrition.dietary import (
     PREFERENCES,
 )
 from modules.profile.routes import _active_preferences
-from modules.receipt.service import ensure_receipt_session_schema
+from modules.receipt.expiry_reference import estimate_expiry_date
+from modules.receipt.service import ensure_receipt_session_schema, normalise_expiry_date
 
 bp = Blueprint("meal_plan_bp", __name__, url_prefix="/api/meals")
 
@@ -38,7 +41,7 @@ MIN_MATCH_RATIO = 0.4
 
 # Valid sort keys accepted by the `sort` query param.
 SORT_KEYS = frozenset({
-    "match", "highest_protein", "lowest_calories", "highest_calories",
+    "expiry", "match", "highest_protein", "lowest_calories", "highest_calories",
 })
 
 
@@ -192,12 +195,17 @@ def find_matching_item(recipe_ingredient, available_set):
     ri = recipe_ingredient.strip().lower()
     if not ri:
         return None
-    ri_tokens = set(_tokens(ri))
-    for item in available_set:
+    available_items = list(available_set)
+    for item in available_items:
         if ri == item:
             return item
+
+    ri_tokens = set(_tokens(ri))
+    for item in available_items:
         if word_match(item, ri) or word_match(ri, item):
             return item
+
+    for item in available_items:
         item_tokens = set(_tokens(item))
         if not ri_tokens or not item_tokens:
             continue
@@ -227,6 +235,28 @@ def _parse_int(raw, default, minimum=1, maximum=None):
     if maximum is not None and v > maximum:
         v = maximum
     return v
+
+
+def _date_from_value(value):
+    if not value:
+        return None
+    if hasattr(value, "date"):
+        return value.date()
+    try:
+        return normalise_expiry_date(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _days_until(expiry_date):
+    if expiry_date is None:
+        return None
+    return (expiry_date - date.today()).days
+
+
+def _expiry_sort_value(recipe):
+    days = recipe.get("earliest_expiry_days")
+    return days if days is not None else 10**9
 
 
 @bp.route("/tags", methods=["GET"])
@@ -371,10 +401,11 @@ def get_meal_recommendations():
         strict_only = _parse_bool(request.args.get("strict_only"), default=False)
         hide_drinks = _parse_bool(request.args.get("hide_drinks"), default=False)
 
-        # Sort order — default "match" (current ranking by match score).
-        sort_key = (request.args.get("sort") or "match").strip().lower()
+        # Sort order — default "expiry" so recipes using soon-expiring fridge
+        # items surface first.
+        sort_key = (request.args.get("sort") or "expiry").strip().lower()
         if sort_key not in SORT_KEYS:
-            sort_key = "match"
+            sort_key = "expiry"
 
         # Tags filter — recipe must have ALL selected tags
         raw_tags = request.args.get("tags", "")
@@ -392,22 +423,47 @@ def get_meal_recommendations():
         # ---- fridge items + price lookup ----
         rows = db.session.execute(text("""
             SELECT
+                name,
+                matched_name,
                 LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name))) AS match_name,
-                AVG(price) AS avg_price
+                price,
+                expiry_date,
+                created_at
             FROM receipt_items
             WHERE COALESCE(NULLIF(matched_name, ''), name) IS NOT NULL
               AND TRIM(COALESCE(NULLIF(matched_name, ''), name)) != ''
-            GROUP BY LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name)))
         """)).fetchall()
 
         all_items = set()
-        price_map = {}
+        price_values = {}
+        expiry_map = {}
         for r in rows:
-            name = r._mapping["match_name"]
+            row = r._mapping
+            name = row["match_name"]
             all_items.add(name)
-            ap = r._mapping["avg_price"]
-            if ap is not None:
-                price_map[name] = float(ap)
+
+            price = row["price"]
+            if price is not None:
+                price_values.setdefault(name, []).append(float(price))
+
+            expiry_date = row["expiry_date"]
+            if expiry_date is None:
+                expiry_date = estimate_expiry_date(
+                    row["name"] or "",
+                    matched_name=row["matched_name"],
+                    today=_date_from_value(row["created_at"]),
+                )
+            else:
+                expiry_date = _date_from_value(expiry_date)
+
+            if expiry_date and (name not in expiry_map or expiry_date < expiry_map[name]):
+                expiry_map[name] = expiry_date
+
+        price_map = {
+            name: sum(values) / len(values)
+            for name, values in price_values.items()
+            if values
+        }
 
         base_response = {
             "available_items": [],
@@ -433,9 +489,23 @@ def get_meal_recommendations():
             item for item in all_items
             if item not in SKIP_ITEMS and len(item) >= MIN_ITEM_LENGTH
         }
+        match_items = sorted(
+            match_items,
+            key=lambda item: (
+                _days_until(expiry_map.get(item))
+                if _days_until(expiry_map.get(item)) is not None
+                else 10**9,
+                item,
+            ),
+        )
 
         available_with_cat = [
-            {"name": n, "category": classify(n)}
+            {
+                "name": n,
+                "category": classify(n),
+                "expiry_date": expiry_map[n].isoformat() if n in expiry_map else None,
+                "days_until_expiry": _days_until(expiry_map.get(n)),
+            }
             for n in sorted(list(all_items))
         ]
         base_response["available_items"] = available_with_cat
@@ -483,12 +553,21 @@ def get_meal_recommendations():
                 continue
 
             matched = []
+            matched_details = []
             cost = 0.0
             for ing in ingredients:
                 fridge_item = find_matching_item(ing, match_items)
                 if fridge_item:
                     matched.append(ing)
                     cost += price_map.get(fridge_item, 0.0)
+                    expiry_date = expiry_map.get(fridge_item)
+                    matched_details.append({
+                        "name": ing,
+                        "category": classify(ing),
+                        "fridge_item": fridge_item,
+                        "expiry_date": expiry_date.isoformat() if expiry_date else None,
+                        "days_until_expiry": _days_until(expiry_date),
+                    })
 
             mc = len(matched)
             total = len(ingredients)
@@ -517,10 +596,16 @@ def get_meal_recommendations():
                 {"name": ing, "category": classify(ing)}
                 for ing in ingredients
             ]
-            matched_with_cat = [
-                {"name": ing, "category": classify(ing)}
-                for ing in matched
-            ]
+            matched_with_cat = matched_details
+
+            expiring_matches = sorted(
+                [
+                    detail for detail in matched_details
+                    if detail["days_until_expiry"] is not None
+                ],
+                key=lambda detail: (detail["days_until_expiry"], detail["name"]),
+            )
+            earliest_match = expiring_matches[0] if expiring_matches else None
 
             tags = _compute_tags(m, ingredients_with_cat)
 
@@ -552,29 +637,54 @@ def get_meal_recommendations():
                 "match_score": round(mc / total, 2),
                 "estimated_cost": cost,
                 "tags": tags,
+                "earliest_expiry_date": (
+                    earliest_match["expiry_date"] if earliest_match else None
+                ),
+                "earliest_expiry_days": (
+                    earliest_match["days_until_expiry"] if earliest_match else None
+                ),
+                "earliest_expiring_ingredient": (
+                    earliest_match["name"] if earliest_match else None
+                ),
+                "expiring_match_count": len(expiring_matches),
             })
 
         # ---- Sorting ----
         # All sort keys use a numeric falsy-safe fallback so recipes with
         # None for the column sort to the end (descending) or start (ascending).
-        if sort_key == "highest_protein":
+        if sort_key == "expiry":
+            all_recipes.sort(
+                key=lambda x: (
+                    _expiry_sort_value(x),
+                    -x["expiring_match_count"],
+                    -x["match_score"],
+                    -x["match_count"],
+                    x["name"],
+                )
+            )
+        elif sort_key == "highest_protein":
             all_recipes.sort(
                 key=lambda x: (-(x["protein"] if x["protein"] is not None else -1),
-                               -x["match_score"], x["name"])
+                               _expiry_sort_value(x), -x["match_score"], x["name"])
             )
         elif sort_key == "lowest_calories":
             all_recipes.sort(
                 key=lambda x: (x["calories"] if x["calories"] is not None else 10**9,
-                               -x["match_score"], x["name"])
+                               _expiry_sort_value(x), -x["match_score"], x["name"])
             )
         elif sort_key == "highest_calories":
             all_recipes.sort(
                 key=lambda x: (-(x["calories"] if x["calories"] is not None else -1),
-                               -x["match_score"], x["name"])
+                               _expiry_sort_value(x), -x["match_score"], x["name"])
             )
         else:  # default: "match"
             all_recipes.sort(
-                key=lambda x: (-x["match_score"], -x["match_count"], x["name"])
+                key=lambda x: (
+                    -x["match_score"],
+                    _expiry_sort_value(x),
+                    -x["match_count"],
+                    x["name"],
+                )
             )
 
         # ---- Summary counts for the informative header ----

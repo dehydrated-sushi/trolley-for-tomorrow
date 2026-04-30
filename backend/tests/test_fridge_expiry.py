@@ -92,6 +92,73 @@ def test_fridge_list_estimates_existing_missing_expiry_from_created_at(app, clie
     assert item["expiry_estimated"] is True
 
 
+def test_fridge_list_groups_duplicate_items_by_matched_name(app, client):
+    with app.app_context():
+        db.session.add_all([
+            ReceiptItem(
+                receipt_filename="receipt-a.jpg",
+                receipt_path="uploads/receipt-a.jpg",
+                name="WW Baby Spinach",
+                matched_name="baby spinach",
+                qty="120 g",
+                price=3.5,
+                expiry_date=date(2026, 5, 3),
+                created_at=datetime(2026, 4, 28, 3, 46, 0),
+            ),
+            ReceiptItem(
+                receipt_filename="receipt-b.jpg",
+                receipt_path="uploads/receipt-b.jpg",
+                name="Baby Spinach",
+                matched_name="baby spinach",
+                qty="80 g",
+                price=2.0,
+                expiry_date=date(2026, 5, 1),
+                created_at=datetime(2026, 4, 29, 3, 46, 0),
+            ),
+        ])
+        db.session.commit()
+
+    response = client.get("/api/fridge/items")
+
+    assert response.status_code == 200
+    items = response.get_json()["items"]
+    assert len(items) == 1
+    assert items[0]["duplicate_count"] == 2
+    assert sorted(items[0]["duplicate_ids"]) == [1, 2]
+    assert items[0]["qty"] == "200 g"
+    assert items[0]["price"] == 5.5
+    assert items[0]["expiry_date"] == "2026-05-01"
+
+
+def test_fridge_delete_can_remove_duplicate_group(app, client):
+    with app.app_context():
+        db.session.add_all([
+            ReceiptItem(
+                receipt_filename="receipt-a.jpg",
+                receipt_path="uploads/receipt-a.jpg",
+                name="Milk",
+                matched_name="milk",
+                qty="1 l",
+            ),
+            ReceiptItem(
+                receipt_filename="receipt-b.jpg",
+                receipt_path="uploads/receipt-b.jpg",
+                name="Lite Milk",
+                matched_name="milk",
+                qty="2 l",
+            ),
+        ])
+        db.session.commit()
+
+    response = client.delete("/api/fridge/items/1?duplicates=true")
+
+    assert response.status_code == 200
+    assert response.get_json()["deleted_count"] == 2
+
+    with app.app_context():
+        assert ReceiptItem.query.count() == 0
+
+
 def test_manual_fridge_item_rejects_invalid_expiry_date(client):
     response = client.post(
         "/api/fridge/items",
