@@ -140,6 +140,8 @@ function RecipeCard({
   tagDefs,
   isFavourited,
   onToggleFavourite,
+  onMarkCooked,
+  isCooked,
   shoppingSet,
   highlighted,
   cardRef,
@@ -247,10 +249,10 @@ function RecipeCard({
         ],
       } : {}}
       transition={highlighted ? { duration: 1.6, ease: 'easeInOut' } : {}}
-      className="bg-surface-container-lowest rounded-[2rem] overflow-hidden editorial-shadow"
+      className="bg-surface-container-lowest rounded-[2rem] overflow-visible editorial-shadow"
     >
       <div
-        className="relative h-40 overflow-hidden"
+        className="relative h-40 overflow-hidden rounded-t-[2rem]"
         style={{
           background: `linear-gradient(135deg, ${heroInfo.bg} 0%, ${heroInfo.bg} 55%, ${heroInfo.colour}33 100%)`,
         }}
@@ -323,9 +325,9 @@ function RecipeCard({
             </span>
           </motion.button>
         </div>
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-3 text-on-surface-variant text-sm flex-wrap rounded-xl px-2 py-1.5 -mx-2">
           <NutritionPopover recipe={meal}>
-            <div className="flex items-center gap-3 text-on-surface-variant text-sm flex-wrap rounded-xl px-2 py-1.5 -mx-2 hover:bg-surface-container/60 transition-colors">
+            <span className="inline-flex items-center gap-3 flex-wrap hover:bg-surface-container/60 transition-colors rounded-lg -m-1 p-1">
               <span className="flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">local_fire_department</span>
                 {meal.calories != null ? `${Math.round(meal.calories)} kcal` : 'N/A'}
@@ -340,8 +342,8 @@ function RecipeCard({
                 <span className="material-symbols-outlined text-sm">kitchen</span>
                 {meal.match_count}/{meal.total_ingredients} in fridge
               </span>
-              <span className="material-symbols-outlined text-[14px] opacity-50 ml-auto">info</span>
-            </div>
+              <span className="material-symbols-outlined text-[14px] opacity-50">info</span>
+            </span>
           </NutritionPopover>
         </div>
 
@@ -478,6 +480,27 @@ function RecipeCard({
           </AnimatePresence>
         </div>
 
+        <div className="mb-6">
+          <motion.button
+            type="button"
+            onClick={() => onMarkCooked?.(meal)}
+            disabled={isCooked}
+            whileHover={isCooked ? {} : { scale: 1.02 }}
+            whileTap={isCooked ? {} : { scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+            className={
+              isCooked
+                ? 'inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 text-emerald-800 text-sm font-bold cursor-default'
+                : 'inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-bold shadow-sm hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+            }
+          >
+            <span className="material-symbols-outlined text-base">
+              {isCooked ? 'check_circle' : 'restaurant'}
+            </span>
+            {isCooked ? 'Cooked' : 'Mark cooked'}
+          </motion.button>
+        </div>
+
         {/* Full step list (expandable) */}
         {steps.length > 0 && (
           <div>
@@ -550,6 +573,7 @@ export default function MealsPage() {
   // modal's filter/sort view.
   const [favouriteRecipes, setFavouriteRecipes] = useState([])
   const [favouritesOpen, setFavouritesOpen] = useState(false)
+  const [cookedRecipeIds, setCookedRecipeIds] = useState(() => new Set())
 
   // Shopping-list snapshot — lowercased Set of names currently in the
   // user's shopping list. Used by RecipeCard chips to render "added"
@@ -583,6 +607,15 @@ export default function MealsPage() {
         setFavouriteRecipes(d?.favourites || [])
       })
       .catch(() => { /* ignore — favourites are optional */ })
+
+    apiFetch('/api/waste/cooked-meals?days=30')
+      .then((d) => {
+        const ids = (d?.cooked_meals || [])
+          .map((meal) => meal.recipe_id)
+          .filter((id) => id != null)
+        setCookedRecipeIds(new Set(ids))
+      })
+      .catch(() => { /* ignore — cooked history is optional */ })
   }, [])
 
   // Keep shopping snapshot fresh (updates from this tab, other components,
@@ -648,6 +681,40 @@ export default function MealsPage() {
         })
       })
   }, [recommendations])
+
+  const handleMarkCooked = useCallback((meal) => {
+    if (!meal) return
+    setCookedRecipeIds((prev) => new Set(prev).add(meal.id))
+
+    apiFetch('/api/waste/cooked-meals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipe_id: meal.id,
+        recipe_name: meal.name,
+        servings: 1,
+        quantity_grams: meal.costed_grams || 0,
+        cooked_date: new Date().toISOString().slice(0, 10),
+        notes: meal.earliest_expiring_ingredient
+          ? `Used ${meal.earliest_expiring_ingredient}`
+          : null,
+      }),
+    })
+      .then(() => {
+        toast.show({ message: `${meal.name} added to cooked meals` })
+      })
+      .catch(() => {
+        setCookedRecipeIds((prev) => {
+          const next = new Set(prev)
+          next.delete(meal.id)
+          return next
+        })
+        toast.show({
+          message: 'Could not mark meal as cooked',
+          tone: 'error',
+        })
+      })
+  }, [])
 
   // Scroll + highlight when `?highlight=<id>` is present AND the matching
   // card is rendered. Clears URL param immediately so a refresh doesn't
@@ -1082,6 +1149,8 @@ export default function MealsPage() {
                   tagDefs={tagDefs}
                   isFavourited={favouriteIds.has(meal.id)}
                   onToggleFavourite={handleToggleFavourite}
+                  onMarkCooked={handleMarkCooked}
+                  isCooked={cookedRecipeIds.has(meal.id)}
                   shoppingSet={shoppingSet}
                   highlighted={activeHighlight === meal.id}
                   cardRef={(el) => {
