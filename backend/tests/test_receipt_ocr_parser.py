@@ -61,6 +61,45 @@ def test_parse_receipt_lines_displays_product_name_but_keeps_known_match():
     assert results[1]["matched_name"] == "milk"
 
 
+def test_parse_receipt_lines_keeps_valid_unmatched_product_lines():
+    known_items = ["milk"]
+    lines = [
+        "Dragon Fruit 2 each $5.00",
+    ]
+
+    results = parse_receipt_lines(lines, known_items)
+
+    assert results == [{
+        "name": "Dragon Fruit",
+        "qty": "2 each",
+        "price": 5.0,
+    }]
+
+
+def test_parse_receipt_lines_skips_promotional_price_noise():
+    known_items = ["milk"]
+    lines = [
+        "Promotional Price $2.00",
+        "Milk 2L $4.50",
+    ]
+
+    results = parse_receipt_lines(lines, known_items)
+
+    assert [item["name"] for item in results] == ["Milk"]
+
+
+def test_parse_receipt_lines_dedupes_repeated_scanned_items():
+    known_items = ["milk"]
+    lines = [
+        "Milk 2L $4.50",
+        "Milk 2L $4.50",
+    ]
+
+    results = parse_receipt_lines(lines, known_items)
+
+    assert len(results) == 1
+
+
 def test_format_product_name_makes_scanned_names_user_friendly():
     assert format_product_name("ww baby spinach") == "WW Baby Spinach"
     assert format_product_name("uht lite milk") == "UHT Lite Milk"

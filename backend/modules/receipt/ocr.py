@@ -1,13 +1,14 @@
 import os
 import re
 import shutil
+from pathlib import Path
 import pandas as pd
 import pytesseract
 from PIL import Image, ImageOps, ImageFilter
 from pillow_heif import register_heif_opener
 register_heif_opener()
 
-KNOWN_ITEMS_PATH = "data/processed/known_ingredients.csv"
+KNOWN_ITEMS_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "known_ingredients.csv"
 
 FOOTER_START_PATTERNS = [
     r"\bsub\s*total\b",
@@ -27,6 +28,7 @@ NON_PRODUCT_PATTERNS = [
     "coupon", "offers expire", "thank you", "visit", "abn", "term id",
     "card", "trans", "glen huntly", "woolworths group", "flybuys",
     "everyday rewards", "rewards", "member", "points", "receipt",
+    "promotional price", "promotion", "promo",
 ]
 
 
@@ -180,6 +182,7 @@ def is_footer_start_line(line):
 
 def parse_receipt_lines(lines, known_items, threshold=0.5):
     results = []
+    seen = set()
 
     for line in lines:
         line = clean_line(line)
@@ -198,6 +201,10 @@ def parse_receipt_lines(lines, known_items, threshold=0.5):
             continue
 
         match_name, score = best_match_product_to_known(product_text, known_items)
+        key = match_name if match_name and score >= threshold else product_text
+        key = re.sub(r"\s+", " ", key.strip().lower())
+        if key in seen:
+            continue
 
         if match_name and score >= threshold:
             results.append({
@@ -207,6 +214,14 @@ def parse_receipt_lines(lines, known_items, threshold=0.5):
                 "qty": qty,
                 "price": price
             })
+            seen.add(key)
+        elif price is not None and len(product_text) >= 3:
+            results.append({
+                "name": format_product_name(product_text),
+                "qty": qty,
+                "price": price,
+            })
+            seen.add(key)
 
     return results
 
