@@ -251,9 +251,13 @@ def create_tables():
         quantity_label TEXT,
         cost_impact DOUBLE PRECISION DEFAULT 0,
         reason TEXT,
+        metadata_json TEXT,
         event_date DATE DEFAULT CURRENT_DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE waste_events
+        ADD COLUMN IF NOT EXISTS metadata_json TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_waste_events_event_date
         ON waste_events (event_date);
