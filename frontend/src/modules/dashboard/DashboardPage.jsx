@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getUserProfile } from '../../lib/auth'
+import { apiFetch } from '../../lib/api'
+import { getItems } from '../../shared/shoppingList'
 
 const EASE = [0.22, 1, 0.36, 1]
 const SETTINGS_KEY = 'profile_settings'
@@ -15,26 +17,8 @@ const DEFAULT_SETTINGS = {
   shoppingGuardrails: true,
 }
 
-const mockExpiringItems = [
-  { id: 1, name: 'Chicken Breast', daysLeft: 1 },
-  { id: 2, name: 'Spinach', daysLeft: 2 },
-  { id: 3, name: 'Whole Milk', daysLeft: 3 },
-  { id: 4, name: 'Greek Yogurt', daysLeft: 4 },
-  { id: 5, name: 'Broccoli', daysLeft: 5 },
-]
-const mockFridgeTotalCount = 12
-
-const mockShoppingItems = [
-  { id: 1, name: 'Oats' },
-  { id: 2, name: 'Almond Milk' },
-  { id: 3, name: 'Brown Rice' },
-  { id: 4, name: 'Cherry Tomatoes' },
-]
-const mockShoppingTotalCount = 8
-
-const mockCarbonKg = 2.4
-
-const mockTips = [
+// Fallback tips in case API returns empty
+const FALLBACK_TIPS = [
   {
     id: 1,
     title: 'Store spinach right',
@@ -65,7 +49,6 @@ const mockTips = [
 function loadSettings() {
   const raw = localStorage.getItem(SETTINGS_KEY)
   if (!raw) return DEFAULT_SETTINGS
-
   try {
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
   } catch {
@@ -73,11 +56,15 @@ function loadSettings() {
   }
 }
 
+function calcDaysLeft(expiryDateStr) {
+  return Math.ceil((new Date(expiryDateStr) - new Date()) / (1000 * 60 * 60 * 24))
+}
+
 function ExpiryPill({ days }) {
   if (days <= 1) {
     return (
       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-        {days === 0 ? 'Today' : '1 day left'}
+        {days <= 0 ? 'Today' : '1 day left'}
       </span>
     )
   }
@@ -118,16 +105,94 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState(() => getUserProfile()?.name || 'Trolley Member')
   const [settings, setSettings] = useState(loadSettings)
 
+  // Fridge
+  const [expiringItems, setExpiringItems] = useState([])
+  const [fridgeTotalCount, setFridgeTotalCount] = useState(0)
+  const [fridgeLoading, setFridgeLoading] = useState(true)
+
+  // Shopping
+  const [shoppingItems, setShoppingItems] = useState([])
+  const [shoppingTotalCount, setShoppingTotalCount] = useState(0)
+
+  // Carbon
+  const [carbonKg, setCarbonKg] = useState(null)
+  const [carbonLoading, setCarbonLoading] = useState(true)
+
+  // Tips
+  const [tips, setTips] = useState(FALLBACK_TIPS)
+  const [tipsLoading, setTipsLoading] = useState(true)
+
+  // Fetch fridge items
+  useEffect(() => {
+    apiFetch('/api/fridge/items')
+      .then((data) => {
+        const items = data.items || []
+        setFridgeTotalCount(items.length)
+
+        // Calculate days left, sort by soonest, show top 5
+        const withDays = items
+          .map((item) => ({ ...item, daysLeft: calcDaysLeft(item.expiry_date) }))
+          .filter((item) => item.daysLeft >= 0)
+          .sort((a, b) => a.daysLeft - b.daysLeft)
+          .slice(0, 5)
+
+        setExpiringItems(withDays)
+      })
+      .catch((err) => {
+        console.error('Failed to load fridge items:', err)
+      })
+      .finally(() => setFridgeLoading(false))
+  }, [])
+
+  // Load shopping list from localStorage via shared helper
+  useEffect(() => {
+    const items = getItems()
+    setShoppingTotalCount(items.length)
+    // Show first 4 unchecked items
+    const unchecked = items.filter((i) => !i.checked).slice(0, 4)
+    setShoppingItems(unchecked)
+  }, [])
+
+  // Fetch carbon + at-risk items from waste analytics
+  useEffect(() => {
+    apiFetch('/api/waste/analytics?days=7')
+      .then((data) => {
+        setCarbonKg(data.weekly_summary?.co2_impact_kg ?? null)
+      })
+      .catch((err) => {
+        console.error('Failed to load waste analytics:', err)
+      })
+      .finally(() => setCarbonLoading(false))
+  }, [])
+
+  // Fetch tips
+  useEffect(() => {
+    apiFetch('/api/foodkeeper/tips?limit=5')
+      .then((data) => {
+        const fetched = (data.tips || []).map((tip) => ({
+          id: tip.product_id,
+          title: tip.product_name,
+          body: tip.body,
+        }))
+        if (fetched.length > 0) setTips(fetched)
+        // else keep FALLBACK_TIPS
+      })
+      .catch((err) => {
+        console.error('Failed to load tips:', err)
+        // Keep FALLBACK_TIPS on error
+      })
+      .finally(() => setTipsLoading(false))
+  }, [])
+
+  // Sync profile settings
   useEffect(() => {
     const syncSnapshot = () => {
       setUserName(getUserProfile()?.name || 'Trolley Member')
       setSettings(loadSettings())
     }
-
     syncSnapshot()
     window.addEventListener('profile-updated', syncSnapshot)
     window.addEventListener('focus', syncSnapshot)
-
     return () => {
       window.removeEventListener('profile-updated', syncSnapshot)
       window.removeEventListener('focus', syncSnapshot)
@@ -161,7 +226,6 @@ export default function DashboardPage() {
         <div className="relative overflow-hidden rounded-[2rem] bg-emerald-900 px-8 py-10 md:px-12 text-white shadow-2xl">
           <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-emerald-700/30 pointer-events-none" />
           <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-emerald-800/40 pointer-events-none" />
-
           <div className="relative z-10">
             <motion.span
               initial={{ opacity: 0, y: 8 }}
@@ -192,6 +256,7 @@ export default function DashboardPage() {
       </motion.header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Expiring Soon */}
         <motion.div {...cardVariants(0.3)} whileHover={cardVariants(0.3).whileHover}>
           <div className="bg-surface-container-lowest rounded-[2rem] shadow-sm h-full flex flex-col">
             <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-outline-variant/10">
@@ -207,25 +272,31 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex-grow px-6 py-3 divide-y divide-outline-variant/10">
-              {mockExpiringItems.map((item, i) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.4 + i * 0.06, ease: EASE }}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <ExpiryIcon days={item.daysLeft} />
-                    <span className="text-sm font-medium text-on-surface">{item.name}</span>
-                  </div>
-                  <ExpiryPill days={item.daysLeft} />
-                </motion.div>
-              ))}
+              {fridgeLoading ? (
+                <p className="text-sm text-on-surface-variant py-4 text-center">Loading...</p>
+              ) : expiringItems.length === 0 ? (
+                <p className="text-sm text-on-surface-variant py-4 text-center">No expiring items 🎉</p>
+              ) : (
+                expiringItems.map((item, i) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.4 + i * 0.06, ease: EASE }}
+                    className="flex items-center justify-between py-3"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ExpiryIcon days={item.daysLeft} />
+                      <span className="text-sm font-medium text-on-surface">{item.name}</span>
+                    </div>
+                    <ExpiryPill days={item.daysLeft} />
+                  </motion.div>
+                ))
+              )}
             </div>
 
             <div className="px-6 pb-6 pt-3 flex items-center justify-between border-t border-outline-variant/10">
-              <span className="text-xs text-on-surface-variant">{mockFridgeTotalCount} items total in fridge</span>
+              <span className="text-xs text-on-surface-variant">{fridgeTotalCount} items total in fridge</span>
               <Link to="/fridge" className="flex items-center gap-1 text-xs font-bold text-primary hover:gap-2 transition-all">
                 View Fridge
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -234,6 +305,7 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
+        {/* Shopping List */}
         <motion.div {...cardVariants(0.38)} whileHover={cardVariants(0.38).whileHover}>
           <div className="bg-surface-container-lowest rounded-[2rem] shadow-sm h-full flex flex-col">
             <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-outline-variant/10">
@@ -249,22 +321,26 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex-grow px-6 py-3 divide-y divide-outline-variant/10">
-              {mockShoppingItems.map((item, i) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.45 + i * 0.06, ease: EASE }}
-                  className="flex items-center gap-2.5 py-3"
-                >
-                  <span className="material-symbols-outlined text-on-surface-variant text-base">radio_button_unchecked</span>
-                  <span className="text-sm font-medium text-on-surface">{item.name}</span>
-                </motion.div>
-              ))}
+              {shoppingItems.length === 0 ? (
+                <p className="text-sm text-on-surface-variant py-4 text-center">Your shopping list is empty</p>
+              ) : (
+                shoppingItems.map((item, i) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.45 + i * 0.06, ease: EASE }}
+                    className="flex items-center gap-2.5 py-3"
+                  >
+                    <span className="material-symbols-outlined text-on-surface-variant text-base">radio_button_unchecked</span>
+                    <span className="text-sm font-medium text-on-surface">{item.name}</span>
+                  </motion.div>
+                ))
+              )}
             </div>
 
             <div className="px-6 pb-6 pt-3 flex items-center justify-between border-t border-outline-variant/10">
-              <span className="text-xs text-on-surface-variant">{mockShoppingTotalCount} items total in list</span>
+              <span className="text-xs text-on-surface-variant">{shoppingTotalCount} items total in list</span>
               <Link to="/shopping" className="flex items-center gap-1 text-xs font-bold text-primary hover:gap-2 transition-all">
                 View List
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -275,10 +351,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+        {/* Carbon Footprint */}
         <motion.div className="md:col-span-2" {...cardVariants(0.46)} whileHover={cardVariants(0.46).whileHover}>
           <div className="bg-emerald-900 rounded-[2rem] shadow-sm h-full flex flex-col p-6 text-white relative overflow-hidden">
             <div className="absolute -bottom-8 -right-8 w-36 h-36 rounded-full bg-emerald-700/30 pointer-events-none" />
-
             <div className="relative z-10 flex-grow">
               <div className="p-2.5 bg-emerald-700/50 rounded-2xl inline-flex mb-4">
                 <span className="material-symbols-outlined text-emerald-300" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -289,8 +365,16 @@ export default function DashboardPage() {
               <p className="text-emerald-100/60 text-xs mb-5">From food wasted this week</p>
 
               <div className="mb-1">
-                <span className="text-5xl font-extrabold leading-none">{mockCarbonKg}</span>
-                <span className="text-emerald-300 font-semibold ml-1.5">kg</span>
+                {carbonLoading ? (
+                  <span className="text-emerald-300 text-sm">Loading...</span>
+                ) : carbonKg !== null ? (
+                  <>
+                    <span className="text-5xl font-extrabold leading-none">{carbonKg.toFixed(1)}</span>
+                    <span className="text-emerald-300 font-semibold ml-1.5">kg</span>
+                  </>
+                ) : (
+                  <span className="text-emerald-300 text-sm">No data</span>
+                )}
               </div>
               <p className="text-emerald-100/50 text-xs">CO₂ equivalent</p>
             </div>
@@ -307,8 +391,9 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
+        {/* Tips */}
         <motion.div className="md:col-span-3" {...cardVariants(0.52)} whileHover={cardVariants(0.52).whileHover}>
-          <TipCarousel tips={mockTips} />
+          <TipCarousel tips={tips} loading={tipsLoading} />
         </motion.div>
       </div>
 
@@ -352,7 +437,7 @@ export default function DashboardPage() {
   )
 }
 
-function TipCarousel({ tips }) {
+function TipCarousel({ tips, loading }) {
   const [index, setIndex] = useState(0)
   const tip = tips[index]
 
@@ -374,18 +459,22 @@ function TipCarousel({ tips }) {
       </div>
 
       <div className="flex-grow relative overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tip.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.35, ease: EASE }}
-          >
-            <h3 className="font-bold text-on-surface text-base mb-2">{tip.title}</h3>
-            <p className="text-sm text-on-surface-variant leading-relaxed">{tip.body}</p>
-          </motion.div>
-        </AnimatePresence>
+        {loading ? (
+          <p className="text-sm text-on-surface-variant">Loading tips...</p>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tip.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35, ease: EASE }}
+            >
+              <h3 className="font-bold text-on-surface text-base mb-2">{tip.title}</h3>
+              <p className="text-sm text-on-surface-variant leading-relaxed">{tip.body}</p>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </div>
 
       <div className="flex items-center justify-between mt-5 pt-4 border-t border-outline-variant/10">

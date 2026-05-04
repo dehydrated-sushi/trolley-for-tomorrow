@@ -18,7 +18,6 @@ import SortDropdown from './SortDropdown'
 import FavouritesModal from './FavouritesModal'
 
 const SORT_OPTIONS = [
-  { key: 'expiry',           label: 'Expiring first' },
   { key: 'match',            label: 'Best match' },
   { key: 'highest_protein',  label: 'Highest protein' },
   { key: 'lowest_calories',  label: 'Lowest calories' },
@@ -127,14 +126,6 @@ function RecipeHeroImage({ recipeId }) {
   )
 }
 
-function expiryLabel(days) {
-  if (days == null) return ''
-  if (days < 0) return 'expired'
-  if (days === 0) return 'expires today'
-  if (days === 1) return '1 day left'
-  return `${days} days left`
-}
-
 function RecipeCard({
   meal,
   tagDefs,
@@ -171,9 +162,6 @@ function RecipeCard({
     return { name, category, inFridge: matchedSet.has(name) }
   })
   const missingIngredients = allIngredients.filter((i) => !i.inFridge)
-  const expiryHint = meal.earliest_expiring_ingredient
-    ? expiryLabel(meal.earliest_expiry_days)
-    : ''
 
   const steps = meal.steps || []
   const STEPS_PREVIEW = 4
@@ -344,16 +332,6 @@ function RecipeCard({
             </div>
           </NutritionPopover>
         </div>
-
-        {meal.earliest_expiring_ingredient && (
-          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-            <span className="material-symbols-outlined text-base">event_upcoming</span>
-            <span className="truncate">
-              Use {meal.earliest_expiring_ingredient} first
-              {expiryHint ? ` · ${expiryHint}` : ''}
-            </span>
-          </div>
-        )}
 
         {/* Tag chips */}
         {meal.tags && meal.tags.length > 0 && (
@@ -527,7 +505,7 @@ export default function MealsPage() {
   const [strictOnly, setStrictOnly] = useState(false)
   const [hideDrinks, setHideDrinks] = useState(false)
   const [selectedTags, setSelectedTags] = useState([])
-  const [sortKey, setSortKey] = useState('expiry')
+  const [sortKey, setSortKey] = useState('match')
   const [page, setPage] = useState(1)
 
   // Metadata
@@ -687,7 +665,7 @@ export default function MealsPage() {
       if (strictOnly) params.set('strict_only', 'true')
       if (hideDrinks) params.set('hide_drinks', 'true')
       if (selectedTags.length) params.set('tags', selectedTags.join(','))
-      if (sortKey && sortKey !== 'expiry') params.set('sort', sortKey)
+      if (sortKey && sortKey !== 'match') params.set('sort', sortKey)
       params.set('page', String(page))
       params.set('per_page', String(PER_PAGE))
 
@@ -893,7 +871,7 @@ export default function MealsPage() {
 
         {/* Active-sort indicator (only when non-default) */}
         <AnimatePresence>
-          {sortKey !== 'expiry' && (
+          {sortKey !== 'match' && (
             <motion.div
               key="sort-indicator"
               initial={{ opacity: 0, y: -4 }}
@@ -905,11 +883,11 @@ export default function MealsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setSortKey('expiry')
+                  setSortKey('match')
                   setPage(1)
                 }}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/15 transition-colors"
-                title="Reset to Expiring first"
+                title="Reset to Best match"
               >
                 <span className="material-symbols-outlined text-sm">sort</span>
                 Sorted by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label ?? sortKey}
