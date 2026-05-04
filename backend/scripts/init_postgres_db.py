@@ -1,6 +1,8 @@
 import argparse
 import os
 import sys
+import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -720,6 +722,432 @@ def load_recipe_portions():
     load_recipe_portion_ingredients()
 
 
+def _table_exists(cur, table_name):
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = %s
+        )
+    """, (table_name,))
+    return bool(cur.fetchone()[0])
+
+
+def _delete_if_exists(cur, table_name):
+    if _table_exists(cur, table_name):
+        cur.execute(f"DELETE FROM {table_name};")
+        return True
+    return False
+
+
+def seed_mock_data():
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
+
+    receipts = [
+        (
+            1,
+            "mock_weekly_shop_may.csv",
+            "seed/mock_weekly_shop_may.csv",
+            "seed",
+            "Woolworths",
+            today.isoformat(),
+            "seeded",
+            "seeded receipt",
+            "mock-v1",
+            6,
+            27.10,
+        ),
+    ]
+
+    receipt_items = [
+        ("Chicken breast fillets", "chicken breast", 0.98, "600 g", 9.90, today + timedelta(days=2)),
+        ("Pasta", "pasta", 0.96, "500 g", 4.10, today + timedelta(days=7)),
+        ("Lemon", "lemon", 0.99, "180 g", 1.20, today + timedelta(days=4)),
+        ("Cherry tomatoes", "tomato", 0.93, "250 g", 3.00, today + timedelta(days=3)),
+        ("Spinach", "spinach", 0.97, "120 g", 2.70, tomorrow),
+        ("Pesto", "pesto", 0.91, "190 g", 6.20, today + timedelta(days=14)),
+    ]
+
+    shopping_items = [
+        ("Greek yogurt", "protein", 1, "tub", 5.50, False),
+        ("Bread crumbs", "grains & carbs", 1, "pack", 2.80, False),
+        ("Parmesan", "dairy", 1, "bag", 4.60, True),
+    ]
+
+    favourites = [
+        (1, 47892, "Chicken & Tomato Pasta"),
+        (1, 91234, "Broccoli Chicken Pesto Pasta"),
+    ]
+
+    meal_logs = [
+        (47892, "Chicken & Tomato Pasta", 1, 520, 38, 45, 14),
+        (91234, "Broccoli Chicken Pesto Pasta", 1, 610, 42, 39, 24),
+    ]
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for table_name in (
+                "waste_events",
+                "meal_logs",
+                "shopping_list",
+                "user_favourites",
+                "fridge_items",
+                "receipt_items",
+                "receipts",
+            ):
+                _delete_if_exists(cur, table_name)
+
+            receipt = receipts[0]
+            cur.execute("""
+                INSERT INTO receipts (
+                    user_id,
+                    original_filename,
+                    stored_file_path,
+                    scan_source,
+                    store_name,
+                    purchase_date,
+                    scan_status,
+                    raw_ocr_text,
+                    parser_version,
+                    item_count,
+                    total_amount
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, receipt)
+            receipt_id = int(cur.fetchone()[0])
+
+            receipt_item_rows = [
+                (
+                    receipt_id,
+                    "mock_weekly_shop_may.csv",
+                    "seed/mock_weekly_shop_may.csv",
+                    name,
+                    matched_name,
+                    match_score,
+                    qty,
+                    price,
+                    expiry_date.isoformat(),
+                )
+                for name, matched_name, match_score, qty, price, expiry_date in receipt_items
+            ]
+            execute_values(cur, """
+                INSERT INTO receipt_items (
+                    receipt_id,
+                    receipt_filename,
+                    receipt_path,
+                    name,
+                    matched_name,
+                    match_score,
+                    qty,
+                    price,
+                    expiry_date
+                )
+                VALUES %s
+            """, receipt_item_rows)
+
+            cur.execute("""
+                SELECT id, name, matched_name, qty, price, expiry_date
+                FROM receipt_items
+                WHERE receipt_id = %s
+                ORDER BY id ASC
+            """, (receipt_id,))
+            seeded_receipt_items = cur.fetchall()
+            receipt_lookup = {
+                (row[2] or row[1]).strip().lower(): {
+                    "receipt_item_id": int(row[0]),
+                    "display_name": row[1],
+                    "matched_name": row[2] or row[1],
+                    "qty": row[3],
+                    "price": float(row[4] or 0),
+                    "expiry_date": row[5].isoformat() if row[5] else None,
+                }
+                for row in seeded_receipt_items
+            }
+
+            fridge_rows = []
+            for row in receipt_lookup.values():
+                qty_text = row["qty"] or ""
+                amount = 1.0
+                unit = "unit"
+                parts = qty_text.split()
+                if parts:
+                    try:
+                        amount = float(parts[0])
+                    except ValueError:
+                        amount = 1.0
+                if len(parts) > 1:
+                    unit = parts[1]
+                fridge_rows.append((
+                    row["matched_name"],
+                    None,
+                    amount,
+                    unit,
+                    row["price"],
+                    row["expiry_date"],
+                    "receipt",
+                ))
+
+            execute_values(cur, """
+                INSERT INTO fridge_items (
+                    name,
+                    category,
+                    quantity,
+                    unit,
+                    price,
+                    expiry_date,
+                    source
+                )
+                VALUES %s
+            """, fridge_rows)
+
+            execute_values(cur, """
+                INSERT INTO shopping_list (
+                    name,
+                    category,
+                    quantity,
+                    unit,
+                    estimated_price,
+                    checked
+                )
+                VALUES %s
+            """, shopping_items)
+
+            execute_values(cur, """
+                INSERT INTO user_favourites (
+                    user_id,
+                    recipe_id,
+                    recipe_name
+                )
+                VALUES %s
+            """, favourites)
+
+            execute_values(cur, """
+                INSERT INTO meal_logs (
+                    recipe_id,
+                    recipe_name,
+                    eaten_quantity,
+                    calories,
+                    protein,
+                    carbs,
+                    fat
+                )
+                VALUES %s
+            """, meal_logs)
+
+            cooked_meals = [
+                {
+                    "recipe_id": 47892,
+                    "recipe_name": "Chicken & Tomato Pasta",
+                    "quantity_grams": 370,
+                    "quantity_label": "1 serving",
+                    "event_date": today.isoformat(),
+                    "metadata": {
+                        "action": "cooked",
+                        "cooked_time": "18:30",
+                        "ingredient_usage": [
+                            {
+                                "receipt_item_id": receipt_lookup["chicken breast"]["receipt_item_id"],
+                                "name": "chicken breast",
+                                "display_name": receipt_lookup["chicken breast"]["display_name"],
+                                "recipe_ingredient": "chicken breast",
+                                "category": "protein",
+                                "grams_used": 240,
+                                "estimated_cost": 3.96,
+                                "price_per_gram": round(receipt_lookup["chicken breast"]["price"] / 600, 4),
+                                "expiry_date": receipt_lookup["chicken breast"]["expiry_date"],
+                            },
+                            {
+                                "receipt_item_id": receipt_lookup["pasta"]["receipt_item_id"],
+                                "name": "pasta",
+                                "display_name": receipt_lookup["pasta"]["display_name"],
+                                "recipe_ingredient": "pasta",
+                                "category": "grains & carbs",
+                                "grams_used": 90,
+                                "estimated_cost": 0.74,
+                                "price_per_gram": round(receipt_lookup["pasta"]["price"] / 500, 4),
+                                "expiry_date": receipt_lookup["pasta"]["expiry_date"],
+                            },
+                            {
+                                "receipt_item_id": receipt_lookup["tomato"]["receipt_item_id"],
+                                "name": "tomato",
+                                "display_name": receipt_lookup["tomato"]["display_name"],
+                                "recipe_ingredient": "cherry tomatoes",
+                                "category": "vegetables",
+                                "grams_used": 40,
+                                "estimated_cost": 0.48,
+                                "price_per_gram": round(receipt_lookup["tomato"]["price"] / 250, 4),
+                                "expiry_date": receipt_lookup["tomato"]["expiry_date"],
+                            },
+                        ],
+                    },
+                },
+                {
+                    "recipe_id": 91234,
+                    "recipe_name": "Broccoli Chicken Pesto Pasta",
+                    "quantity_grams": 345,
+                    "quantity_label": "1 serving",
+                    "event_date": yesterday.isoformat(),
+                    "metadata": {
+                        "action": "cooked",
+                        "cooked_time": "19:10",
+                        "ingredient_usage": [
+                            {
+                                "receipt_item_id": receipt_lookup["chicken breast"]["receipt_item_id"],
+                                "name": "chicken breast",
+                                "display_name": receipt_lookup["chicken breast"]["display_name"],
+                                "recipe_ingredient": "grilled chicken strips",
+                                "category": "protein",
+                                "grams_used": 160,
+                                "estimated_cost": 2.64,
+                                "price_per_gram": round(receipt_lookup["chicken breast"]["price"] / 600, 4),
+                                "expiry_date": receipt_lookup["chicken breast"]["expiry_date"],
+                            },
+                            {
+                                "receipt_item_id": receipt_lookup["pasta"]["receipt_item_id"],
+                                "name": "pasta",
+                                "display_name": receipt_lookup["pasta"]["display_name"],
+                                "recipe_ingredient": "pasta",
+                                "category": "grains & carbs",
+                                "grams_used": 85,
+                                "estimated_cost": 0.70,
+                                "price_per_gram": round(receipt_lookup["pasta"]["price"] / 500, 4),
+                                "expiry_date": receipt_lookup["pasta"]["expiry_date"],
+                            },
+                            {
+                                "receipt_item_id": receipt_lookup["pesto"]["receipt_item_id"],
+                                "name": "pesto",
+                                "display_name": receipt_lookup["pesto"]["display_name"],
+                                "recipe_ingredient": "pesto",
+                                "category": "other",
+                                "grams_used": 45,
+                                "estimated_cost": 1.47,
+                                "price_per_gram": round(receipt_lookup["pesto"]["price"] / 190, 4),
+                                "expiry_date": receipt_lookup["pesto"]["expiry_date"],
+                            },
+                            {
+                                "receipt_item_id": receipt_lookup["spinach"]["receipt_item_id"],
+                                "name": "spinach",
+                                "display_name": receipt_lookup["spinach"]["display_name"],
+                                "recipe_ingredient": "spinach",
+                                "category": "vegetables",
+                                "grams_used": 55,
+                                "estimated_cost": 1.24,
+                                "price_per_gram": round(receipt_lookup["spinach"]["price"] / 120, 4),
+                                "expiry_date": receipt_lookup["spinach"]["expiry_date"],
+                            },
+                        ],
+                    },
+                },
+            ]
+
+            cooked_event_ids = []
+            for meal in cooked_meals:
+                cur.execute("""
+                    INSERT INTO waste_events (
+                        user_id,
+                        recipe_id,
+                        recipe_name,
+                        item_name,
+                        category,
+                        event_type,
+                        quantity_grams,
+                        quantity_label,
+                        cost_impact,
+                        reason,
+                        metadata_json,
+                        event_date
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    1,
+                    meal["recipe_id"],
+                    meal["recipe_name"],
+                    meal["recipe_name"],
+                    "meal",
+                    "cooked",
+                    meal["quantity_grams"],
+                    meal["quantity_label"],
+                    0,
+                    "Seeded cooked meal",
+                    json.dumps(meal["metadata"]),
+                    meal["event_date"],
+                ))
+                cooked_event_ids.append(int(cur.fetchone()[0]))
+
+            waste_rows = [
+                (
+                    1,
+                    receipt_lookup["spinach"]["receipt_item_id"],
+                    91234,
+                    "Broccoli Chicken Pesto Pasta",
+                    "Spinach",
+                    "vegetables",
+                    "wasted",
+                    28,
+                    "28 g",
+                    0.63,
+                    "Meal leftovers wasted",
+                    json.dumps({
+                        "cooked_event_id": cooked_event_ids[1],
+                        "skip_inventory_update": True,
+                    }),
+                    today.isoformat(),
+                ),
+                (
+                    1,
+                    receipt_lookup["tomato"]["receipt_item_id"],
+                    47892,
+                    "Chicken & Tomato Pasta",
+                    "Cherry tomatoes",
+                    "vegetables",
+                    "expired",
+                    20,
+                    "20 g",
+                    0.24,
+                    "Expired after cooking",
+                    json.dumps({
+                        "cooked_event_id": cooked_event_ids[0],
+                        "skip_inventory_update": True,
+                    }),
+                    tomorrow.isoformat(),
+                ),
+            ]
+
+            execute_values(cur, """
+                INSERT INTO waste_events (
+                    user_id,
+                    receipt_item_id,
+                    recipe_id,
+                    recipe_name,
+                    item_name,
+                    category,
+                    event_type,
+                    quantity_grams,
+                    quantity_label,
+                    cost_impact,
+                    reason,
+                    metadata_json,
+                    event_date
+                )
+                VALUES %s
+            """, waste_rows)
+
+    print("Mock testing data seeded successfully.")
+    print("- receipts: 1")
+    print(f"- receipt_items: {len(receipt_items)}")
+    print(f"- fridge_items: {len(receipt_items)}")
+    print(f"- shopping_list: {len(shopping_items)}")
+    print(f"- user_favourites: {len(favourites)}")
+    print(f"- meal_logs: {len(meal_logs)}")
+    print("- cooked meals: 2")
+    print("- waste events: 2")
+
+
 def verify_database():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -754,6 +1182,11 @@ def parse_args():
         action="store_true",
         help="Create/update tables and load only recipe_portion_ingredients.csv.",
     )
+    parser.add_argument(
+        "--seed-mock-data",
+        action="store_true",
+        help="Create/update tables and seed realistic testing data into user-state tables.",
+    )
     return parser.parse_args()
 
 
@@ -768,6 +1201,8 @@ def main():
         load_food_reference()
     elif args.only_recipe_portions:
         load_recipe_portions()
+    elif args.seed_mock_data:
+        seed_mock_data()
     else:
         load_recipes()
         load_known_ingredients()
