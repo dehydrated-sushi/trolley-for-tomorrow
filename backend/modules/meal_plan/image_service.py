@@ -132,10 +132,7 @@ def _download_bytes(image_url: str) -> Optional[bytes]:
 
 
 def get_cached_image(recipe_id: int) -> Optional[dict]:
-    """Return the cache row if it exists AND the image file is on disk.
-    Returns None if the file is missing locally so the caller re-fetches from
-    Pixabay — happens when another machine populated the DB record but hasn't
-    downloaded the file to this machine yet."""
+    """Return the cache row (positive or known-negative), or None if uncached."""
     _ensure_table()
     row = db.session.execute(text("""
         SELECT recipe_id, image_filename, pixabay_user,
@@ -143,13 +140,7 @@ def get_cached_image(recipe_id: int) -> Optional[dict]:
         FROM recipe_images
         WHERE recipe_id = :rid
     """), {"rid": recipe_id}).fetchone()
-    if row is None:
-        return None
-    result = dict(row._mapping)
-    filename = result.get("image_filename")
-    if filename and not (IMAGE_DIR / filename).exists():
-        return None
-    return result
+    return dict(row._mapping) if row else None
 
 
 def fetch_and_cache(recipe_id: int, recipe_name: str) -> Optional[dict]:
