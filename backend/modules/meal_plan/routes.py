@@ -1,4 +1,5 @@
 from datetime import date
+import re
 
 from flask import Blueprint, abort, jsonify, request, send_from_directory
 from core.database import db
@@ -38,6 +39,10 @@ MATCH_STOPWORDS = frozenset({
 # filling up with 3-of-15 partial matches. Overridden when strict_only=true
 # (which requires 100%).
 MIN_MATCH_RATIO = 0.4
+
+# Ignore implausible receipt-derived unit prices. OCR often stores pack counts
+# as "1"; treating that as 1g turns a normal pack into thousands per recipe.
+MAX_PRICE_PER_GRAM = 0.30
 
 # Valid sort keys accepted by the `sort` query param.
 SORT_KEYS = frozenset({
@@ -259,6 +264,91 @@ def _expiry_sort_value(recipe):
     return days if days is not None else 10**9
 
 
+def _normalise_lookup(value):
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _unit_amount_to_grams(amount, unit):
+    unit = unit.lower()
+    if unit in {"g", "gram", "grams"}:
+        return amount
+    if unit in {"kg", "kilogram", "kilograms"}:
+        return amount * 1000
+    if unit in {"ml", "millilitre", "millilitres", "milliliter", "milliliters"}:
+        return amount
+    if unit in {"l", "lt", "liter", "liters", "litre", "litres"}:
+        return amount * 1000
+    return None
+
+
+def _qty_to_grams(value):
+    if value in (None, ""):
+        return None
+
+    text_value = str(value).strip().lower().replace(",", ".")
+    pack_match = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*([a-z]+)",
+        text_value,
+    )
+    if pack_match:
+        count = float(pack_match.group(1))
+        amount = float(pack_match.group(2))
+        grams = _unit_amount_to_grams(amount, pack_match.group(3))
+        if grams is not None:
+            return count * grams
+
+    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*([a-z]+)", text_value):
+        grams = _unit_amount_to_grams(float(match.group(1)), match.group(2))
+        if grams is not None:
+            return grams
+    return None
+
+
+def _recipe_portion_lookup(recipe_ids):
+    if not recipe_ids:
+        return {}
+
+    ids = sorted({int(recipe_id) for recipe_id in recipe_ids})
+    placeholders = []
+    params = {}
+    for index, recipe_id in enumerate(ids):
+        key = f"rp{index}"
+        placeholders.append(f":{key}")
+        params[key] = recipe_id
+
+    try:
+        rows = db.session.execute(text(f"""
+            SELECT
+                recipe_id,
+                ingredient_name,
+                price_lookup_key,
+                grams_per_portion,
+                weight_confidence
+            FROM recipe_portion_ingredients
+            WHERE recipe_id IN ({', '.join(placeholders)})
+        """), params).fetchall()
+    except Exception:
+        db.session.rollback()
+        return {}
+
+    lookup = {}
+    for row in rows:
+        m = row._mapping
+        recipe_id = m["recipe_id"]
+        grams = m["grams_per_portion"]
+        if grams is None:
+            continue
+        detail = {
+            "grams_per_portion": float(grams),
+            "weight_confidence": m["weight_confidence"],
+        }
+        for key_value in (m["price_lookup_key"], m["ingredient_name"]):
+            key = _normalise_lookup(key_value)
+            if key:
+                lookup[(recipe_id, key)] = detail
+    return lookup
+
+
 @bp.route("/tags", methods=["GET"])
 def get_tags():
     """Return the list of available tags + their descriptions (for the filter UI)."""
@@ -423,9 +513,11 @@ def get_meal_recommendations():
         # ---- fridge items + price lookup ----
         rows = db.session.execute(text("""
             SELECT
+                id,
                 name,
                 matched_name,
                 LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name))) AS match_name,
+                qty,
                 price,
                 expiry_date,
                 created_at
@@ -436,15 +528,24 @@ def get_meal_recommendations():
 
         all_items = set()
         price_values = {}
+        price_per_gram_values = {}
         expiry_map = {}
+        receipt_item_id_map = {}
         for r in rows:
             row = r._mapping
             name = row["match_name"]
             all_items.add(name)
+            if name not in receipt_item_id_map:
+                receipt_item_id_map[name] = row["id"]
 
             price = row["price"]
             if price is not None:
                 price_values.setdefault(name, []).append(float(price))
+                grams = _qty_to_grams(row["qty"])
+                if grams and grams > 0:
+                    price_per_gram = float(price) / grams
+                    if 0 < price_per_gram <= MAX_PRICE_PER_GRAM:
+                        price_per_gram_values.setdefault(name, []).append(price_per_gram)
 
             expiry_date = row["expiry_date"]
             if expiry_date is None:
@@ -462,6 +563,11 @@ def get_meal_recommendations():
         price_map = {
             name: sum(values) / len(values)
             for name, values in price_values.items()
+            if values
+        }
+        price_per_gram_map = {
+            name: sum(values) / len(values)
+            for name, values in price_per_gram_values.items()
             if values
         }
 
@@ -532,7 +638,7 @@ def get_meal_recommendations():
             where_sql = f"({where_sql}) AND ({diet_sql})"
             params.update(diet_params)
 
-        recipe_result = db.session.execute(text(
+        recipe_rows = db.session.execute(text(
             f"SELECT id, name, ingredients_clean, steps_clean, "
             f"       calories, protein, carbohydrates, sugar, "
             f"       total_fat, saturated_fat, sodium, "
@@ -540,12 +646,13 @@ def get_meal_recommendations():
             f"FROM recipes "
             f"WHERE ingredients_clean IS NOT NULL AND ({where_sql}) "
             f"LIMIT 8000"
-        ), params)
+        ), params).fetchall()
+        portion_lookup = _recipe_portion_lookup([row._mapping["id"] for row in recipe_rows])
 
         # ---- Fine-grained scoring + tag computation ----
         all_recipes = []
 
-        for row in recipe_result:
+        for row in recipe_rows:
             m = dict(row._mapping)
             ingredients_raw = m["ingredients_clean"] or ""
             ingredients = [i.strip() for i in ingredients_raw.split("|") if i.strip()]
@@ -555,18 +662,73 @@ def get_meal_recommendations():
             matched = []
             matched_details = []
             cost = 0.0
+            cost_source = "unavailable"
+            costed_grams = 0.0
+            costed_ingredient_count = 0
+            uncosted_ingredient_count = 0
+            pack_price_total = 0.0
             for ing in ingredients:
                 fridge_item = find_matching_item(ing, match_items)
                 if fridge_item:
                     matched.append(ing)
-                    cost += price_map.get(fridge_item, 0.0)
+                    portion_detail = (
+                        portion_lookup.get((m["id"], _normalise_lookup(fridge_item)))
+                        or portion_lookup.get((m["id"], _normalise_lookup(ing)))
+                    )
+                    grams_per_portion = (
+                        portion_detail["grams_per_portion"]
+                        if portion_detail else None
+                    )
+                    ingredient_cost = None
+                    price_per_gram = price_per_gram_map.get(fridge_item)
+                    pack_price = price_map.get(fridge_item)
+                    cost_status = "missing_price_data"
+                    if grams_per_portion is not None and price_per_gram is not None:
+                        ingredient_cost = grams_per_portion * price_per_gram
+                        cost += ingredient_cost
+                        costed_grams += grams_per_portion
+                        costed_ingredient_count += 1
+                        cost_source = "grams_x_receipt_price_per_gram"
+                    else:
+                        uncosted_ingredient_count += 1
+                        if pack_price is not None:
+                            pack_price_total += pack_price
+                        if not portion_detail:
+                            cost_status = "missing_recipe_grams"
+                        elif price_per_gram is None:
+                            cost_status = "missing_receipt_weight"
                     expiry_date = expiry_map.get(fridge_item)
                     matched_details.append({
                         "name": ing,
                         "category": classify(ing),
                         "fridge_item": fridge_item,
+                        "receipt_item_id": receipt_item_id_map.get(fridge_item),
                         "expiry_date": expiry_date.isoformat() if expiry_date else None,
                         "days_until_expiry": _days_until(expiry_date),
+                        "grams_per_portion": (
+                            round(grams_per_portion, 2)
+                            if grams_per_portion is not None else None
+                        ),
+                        "price_per_gram": (
+                            round(price_per_gram, 4)
+                            if price_per_gram is not None else None
+                        ),
+                        "estimated_cost": (
+                            round(ingredient_cost, 2)
+                            if ingredient_cost is not None else None
+                        ),
+                        "pack_price": (
+                            round(pack_price, 2)
+                            if pack_price is not None else None
+                        ),
+                        "cost_status": (
+                            "estimated"
+                            if ingredient_cost is not None else cost_status
+                        ),
+                        "weight_confidence": (
+                            portion_detail.get("weight_confidence")
+                            if portion_detail else None
+                        ),
                     })
 
             mc = len(matched)
@@ -588,8 +750,8 @@ def get_meal_recommendations():
                 if total > 0 and (mc / total) < MIN_MATCH_RATIO:
                     continue
 
-            cost = round(cost, 2)
-            if max_cost is not None and cost > max_cost:
+            estimated_cost = round(cost, 2) if costed_ingredient_count else None
+            if max_cost is not None and estimated_cost is not None and estimated_cost > max_cost:
                 continue
 
             ingredients_with_cat = [
@@ -635,7 +797,15 @@ def get_meal_recommendations():
                 "match_count": mc,
                 "total_ingredients": total,
                 "match_score": round(mc / total, 2),
-                "estimated_cost": cost,
+                "estimated_cost": estimated_cost,
+                "cost_source": cost_source,
+                "costed_grams": round(costed_grams, 2),
+                "costed_ingredient_count": costed_ingredient_count,
+                "uncosted_ingredient_count": uncosted_ingredient_count,
+                "estimated_cost_coverage": (
+                    round(costed_ingredient_count / mc, 2) if mc else 0
+                ),
+                "pack_price_total": round(pack_price_total, 2),
                 "tags": tags,
                 "earliest_expiry_date": (
                     earliest_match["expiry_date"] if earliest_match else None

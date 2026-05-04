@@ -5,6 +5,8 @@ const SIDE_LINKS = [
   { label: 'Virtual Fridge', icon: 'kitchen',        to: '/fridge' },
   { label: 'Upload Receipt', icon: 'receipt_long',   to: '/upload-receipt' },
   { label: 'Meal Plans',    icon: 'restaurant_menu', to: '/meals' },
+  { label: 'Cooked Meals',  icon: 'room_service',    to: '/cooked-meals' },
+  { label: 'Analytics',     icon: 'query_stats',     to: '/analytics' },
   { label: 'Shopping List', icon: 'shopping_basket', to: '/shopping' },
   { label: 'Profile',       icon: 'person',          to: '/profile' },
 ]

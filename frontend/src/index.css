@@ -103,3 +103,25 @@ h1, h2, h3, h4 {
 .editorial-shadow {
   box-shadow: 0 8px 24px rgba(22, 29, 26, 0.06);
 }
+
+/* Fridge card actions are always visible, even if an older hot module is cached. */
+.group.bg-surface-container-lowest.rounded-3xl > .absolute.top-3.right-3 {
+  opacity: 1 !important;
+  z-index: 9999 !important;
+  top: 1.25rem !important;
+  right: 1.25rem !important;
+  gap: 0.5rem !important;
+  pointer-events: auto !important;
+}
+
+.group.bg-surface-container-lowest.rounded-3xl > .absolute.top-3.right-3 > button {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(22, 29, 26, 0.18) !important;
+}
+
+.group.bg-surface-container-lowest.rounded-3xl > .absolute.top-3.right-3 > button:last-child {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+}

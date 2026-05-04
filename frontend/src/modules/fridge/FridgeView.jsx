@@ -516,27 +516,11 @@ function FridgeCard({ item, onEdit, onDelete, onUndo }) {
       exit={{ opacity: 0, scale: 0.92 }}
       transition={{ duration: 0.28, ease: EASE }}
       whileHover={{ y: -4, transition: { type: 'spring', stiffness: 380, damping: 26 } }}
-      className="group bg-surface-container-lowest rounded-3xl p-5 flex flex-col relative hover:shadow-lg transition-shadow"
+      className="group bg-surface-container-lowest rounded-3xl p-5 flex flex-col relative hover:shadow-lg transition-shadow min-h-[280px]"
     >
-      {/* Action buttons */}
-      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => onEdit(item)}
-          className="w-7 h-7 rounded-full bg-white/90 hover:bg-white shadow-sm flex items-center justify-center"
-        >
-          <span className="material-symbols-outlined text-[15px] text-on-surface">edit</span>
-        </button>
-        <button
-          onClick={() => onDelete(item)}
-          className="w-7 h-7 rounded-full bg-white/90 hover:bg-red-50 hover:text-red-600 shadow-sm flex items-center justify-center"
-        >
-          <span className="material-symbols-outlined text-[15px] text-on-surface">close</span>
-        </button>
-      </div>
-
       {/* Icon area */}
       <div
-        className="w-full h-24 rounded-2xl flex items-center justify-center mb-4 relative"
+        className="w-full h-28 sm:h-32 rounded-2xl flex items-center justify-center mb-4 relative"
         style={{ background: cat.bg }}
       >
         <span className="material-symbols-outlined text-5xl" style={{ color: cat.colour, fontVariationSettings: "'FILL' 1" }}>
@@ -565,6 +549,27 @@ function FridgeCard({ item, onEdit, onDelete, onUndo }) {
         {item.price != null && (
           <span className="text-sm font-bold text-primary">${Number(item.price).toFixed(2)}</span>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 pt-3">
+        <button
+          type="button"
+          aria-label={`Edit ${item.name}`}
+          onClick={() => onEdit(item)}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-surface-container-high text-on-surface text-xs font-bold hover:bg-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/40"
+        >
+          <span className="material-symbols-outlined text-base">edit</span>
+          Edit
+        </button>
+        <button
+          type="button"
+          aria-label={`Delete ${item.name}`}
+          onClick={() => onDelete(item)}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
+        >
+          <span className="material-symbols-outlined text-base">delete</span>
+          Delete
+        </button>
       </div>
     </motion.div>
   )
@@ -794,7 +799,7 @@ export default function FridgeView() {
 
       {/* ── Grid ── */}
       {!loading && liveCount > 0 && (
-        <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <motion.div layout className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-5">
           <AnimatePresence initial={false}>
             {visible.map(item => (
               <FridgeCard
