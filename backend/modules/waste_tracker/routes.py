@@ -1,8 +1,10 @@
 from collections import defaultdict
 from datetime import date, timedelta
+import json
+import re
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from core.database import db
 from modules.nutrition.classifier import classify
@@ -13,6 +15,26 @@ bp = Blueprint("waste_tracker_bp", __name__, url_prefix="/api/waste")
 WASTE_EVENT_TYPES = frozenset({"wasted", "expired"})
 EVENT_TYPES = WASTE_EVENT_TYPES | frozenset({"cooked", "saved_leftover"})
 CO2_KG_PER_FOOD_KG = 2.5
+
+_QTY_UNITS = {
+    "g": ("g", 1),
+    "gram": ("g", 1),
+    "grams": ("g", 1),
+    "kg": ("g", 1000),
+    "kilogram": ("g", 1000),
+    "kilograms": ("g", 1000),
+    "ml": ("ml", 1),
+    "millilitre": ("ml", 1),
+    "millilitres": ("ml", 1),
+    "milliliter": ("ml", 1),
+    "milliliters": ("ml", 1),
+    "l": ("ml", 1000),
+    "lt": ("ml", 1000),
+    "liter": ("ml", 1000),
+    "liters": ("ml", 1000),
+    "litre": ("ml", 1000),
+    "litres": ("ml", 1000),
+}
 
 
 def _id_column_sql():
@@ -36,10 +58,21 @@ def _ensure_table():
             quantity_label TEXT,
             cost_impact DOUBLE PRECISION DEFAULT 0,
             reason TEXT,
+            metadata_json TEXT,
             event_date DATE DEFAULT CURRENT_DATE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """))
+    db.session.commit()
+    columns = {
+        column["name"]
+        for column in inspect(db.engine).get_columns("waste_events")
+    }
+    if "metadata_json" not in columns:
+        db.session.execute(text("""
+            ALTER TABLE waste_events
+            ADD COLUMN metadata_json TEXT
+        """))
     db.session.execute(text("""
         CREATE INDEX IF NOT EXISTS idx_waste_events_event_date
         ON waste_events (event_date)
@@ -61,6 +94,97 @@ def _parse_float(value, field, minimum=0):
     if parsed < minimum:
         raise ValueError(f"{field} cannot be negative")
     return parsed
+
+
+def _format_quantity(value, unit):
+    value = max(0, float(value or 0))
+    if unit == "g" and value >= 1000:
+        kg = value / 1000
+        return f"{kg:g} kg"
+    if unit == "ml" and value >= 1000:
+        litres = value / 1000
+        return f"{litres:g} l"
+    return f"{value:g} {unit}"
+
+
+def _quantity_to_base(value):
+    if value in (None, ""):
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([a-zA-Z]+)", str(value).strip().lower())
+    if not match:
+        return None
+    unit_info = _QTY_UNITS.get(match.group(2))
+    if not unit_info:
+        return None
+    unit, multiplier = unit_info
+    return float(match.group(1)) * multiplier, unit
+
+
+def _decrement_fridge_items(ingredient_usage):
+    updates = []
+    for ingredient in ingredient_usage or []:
+        receipt_item_id = ingredient.get("receipt_item_id")
+        grams_used = ingredient.get("grams_used") or ingredient.get("quantity_grams")
+        try:
+            receipt_item_id = int(receipt_item_id)
+            grams_used = float(grams_used or 0)
+        except (TypeError, ValueError):
+            continue
+        if grams_used <= 0:
+            continue
+
+        row = db.session.execute(text("""
+            SELECT id, name, qty, price
+            FROM receipt_items
+            WHERE id = :id
+        """), {"id": receipt_item_id}).fetchone()
+        if not row:
+            continue
+
+        item = row._mapping
+        parsed_qty = _quantity_to_base(item["qty"])
+        if not parsed_qty:
+            continue
+
+        current_amount, unit = parsed_qty
+        remaining = max(0, current_amount - grams_used)
+        if remaining <= 0.5:
+            db.session.execute(text("""
+                DELETE FROM receipt_items
+                WHERE id = :id
+            """), {"id": receipt_item_id})
+            updates.append({
+                "receipt_item_id": receipt_item_id,
+                "name": item["name"],
+                "previous_qty": item["qty"],
+                "new_qty": None,
+                "removed": True,
+            })
+            continue
+
+        new_qty = _format_quantity(remaining, unit)
+        price = item["price"]
+        new_price = None
+        if price is not None and current_amount > 0:
+            new_price = round(float(price) * (remaining / current_amount), 2)
+        db.session.execute(text("""
+            UPDATE receipt_items
+            SET qty = :qty,
+                price = :price
+            WHERE id = :id
+        """), {
+            "id": receipt_item_id,
+            "qty": new_qty,
+            "price": new_price,
+        })
+        updates.append({
+            "receipt_item_id": receipt_item_id,
+            "name": item["name"],
+            "previous_qty": item["qty"],
+            "new_qty": new_qty,
+            "removed": False,
+        })
+    return updates
 
 
 def _parse_int(value, field):
@@ -86,10 +210,19 @@ def _event_to_dict(row):
     m["created_at"] = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
     m["quantity_grams"] = float(m["quantity_grams"] or 0)
     m["cost_impact"] = float(m["cost_impact"] or 0)
+    metadata_raw = m.pop("metadata_json", None)
+    if metadata_raw:
+        try:
+            m["metadata"] = json.loads(metadata_raw)
+        except (TypeError, ValueError):
+            m["metadata"] = {}
+    else:
+        m["metadata"] = {}
     return m
 
 
 def _cooked_meal_from_event(event):
+    metadata = event.get("metadata") or {}
     return {
         "id": event["id"],
         "event_id": event["id"],
@@ -99,8 +232,13 @@ def _cooked_meal_from_event(event):
         "servings": event.get("quantity_label") or "1 serving",
         "quantity_grams": event["quantity_grams"],
         "cooked_date": event["event_date"],
+        "cooked_time": metadata.get("cooked_time"),
         "created_at": event["created_at"],
         "notes": event.get("reason"),
+        "metadata": metadata,
+        "ingredient_usage": metadata.get("ingredient_usage", []),
+        "action": metadata.get("action", "cooked"),
+        "waste_log": metadata.get("waste_log"),
     }
 
 
@@ -199,6 +337,7 @@ def create_cooked_meal():
             if float(serving_count).is_integer() and serving_count == 1
             else f"{serving_count:g} servings"
         )
+        metadata = payload.get("metadata") or {}
 
         inserted = db.session.execute(text("""
             INSERT INTO waste_events (
@@ -212,6 +351,7 @@ def create_cooked_meal():
                 quantity_label,
                 cost_impact,
                 reason,
+                metadata_json,
                 event_date
             )
             VALUES (
@@ -225,6 +365,7 @@ def create_cooked_meal():
                 :quantity_label,
                 0,
                 :notes,
+                :metadata_json,
                 :event_date
             )
             RETURNING *
@@ -236,11 +377,16 @@ def create_cooked_meal():
             "quantity_grams": quantity_grams or 0,
             "quantity_label": serving_label,
             "notes": (payload.get("notes") or payload.get("reason") or "").strip() or None,
+            "metadata_json": json.dumps(metadata),
             "event_date": cooked_date,
         }).fetchone()
+        fridge_updates = _decrement_fridge_items(metadata.get("ingredient_usage") or [])
         db.session.commit()
 
-        return jsonify({"cooked_meal": _cooked_meal_to_dict(inserted)}), 201
+        return jsonify({
+            "cooked_meal": _cooked_meal_to_dict(inserted),
+            "fridge_updates": fridge_updates,
+        }), 201
 
     except Exception as exc:
         db.session.rollback()
@@ -310,6 +456,7 @@ def create_waste_event():
                 quantity_label,
                 cost_impact,
                 reason,
+                metadata_json,
                 event_date
             )
             VALUES (
@@ -324,6 +471,7 @@ def create_waste_event():
                 :quantity_label,
                 :cost_impact,
                 :reason,
+                :metadata_json,
                 :event_date
             )
             RETURNING *
@@ -339,6 +487,7 @@ def create_waste_event():
             "quantity_label": (payload.get("quantity_label") or "").strip() or None,
             "cost_impact": cost_impact or 0,
             "reason": (payload.get("reason") or "").strip() or None,
+            "metadata_json": json.dumps(payload.get("metadata") or {}),
             "event_date": event_date,
         }).fetchone()
         db.session.commit()
@@ -422,6 +571,10 @@ def get_waste_analytics():
         cost = float(event["cost_impact"] or 0)
 
         if event_date >= current_start and event_type == "cooked":
+            try:
+                metadata = json.loads(event.get("metadata_json") or "{}")
+            except (TypeError, ValueError):
+                metadata = {}
             cooked_event = {
                 **event,
                 "event_date": event_date.isoformat(),
@@ -432,6 +585,7 @@ def get_waste_analytics():
                 ),
                 "quantity_grams": grams,
                 "cost_impact": cost,
+                "metadata": metadata,
             }
             current_cooked.append(cooked_event)
 

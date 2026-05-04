@@ -24,6 +24,26 @@ const SORT_OPTIONS = [
   { key: 'lowest_calories',  label: 'Lowest calories' },
   { key: 'highest_calories', label: 'Highest calories' },
 ]
+const SMALL_NAME_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'from', 'in', 'of', 'on', 'or', 'the', 'to', 'with'])
+
+function prettyName(value, fallback = 'Recipe') {
+  const clean = String(value || '')
+    .replace(/[_|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!clean) return fallback
+
+  return clean
+    .split(' ')
+    .map((word, index) => {
+      const lower = word.toLowerCase()
+      if (index > 0 && SMALL_NAME_WORDS.has(lower)) return lower
+      if (/^[A-Z0-9]{2,}$/.test(word)) return word
+      return lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
+    .join(' ')
+}
 
 /** Dominant category across the full ingredient list (for hero tint). */
 function dominantCategory(recipe) {
@@ -133,6 +153,40 @@ function expiryLabel(days) {
   if (days === 0) return 'expires today'
   if (days === 1) return '1 day left'
   return `${days} days left`
+}
+
+function currentTimeValue() {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+function formatUsedGrams(value) {
+  const grams = Number(value)
+  if (!Number.isFinite(grams) || grams <= 0) return null
+  if (grams >= 1000) return `${(grams / 1000).toFixed(1)} kg`
+  return `${Math.round(grams)} g`
+}
+
+function buildCookedIngredientUsage(meal) {
+  return (meal?.matched_ingredients || []).map((detail, index) => {
+    const item = detail.fridge_item || detail.name || `Ingredient ${index + 1}`
+    const used = formatUsedGrams(detail.grams_per_portion)
+    const cost = Number(detail.estimated_cost ?? detail.pack_price ?? 0)
+    return {
+      id: `${item}-${index}`,
+      item: prettyName(item, `Ingredient ${index + 1}`),
+      recipe_ingredient: prettyName(detail.name || item, `Ingredient ${index + 1}`),
+      receipt_item_id: detail.receipt_item_id || null,
+      category: detail.category || 'other',
+      usage: used ? `${used} used` : 'Used from fridge',
+      remaining: used ? 'Tracked in fridge' : 'Amount not measured',
+      status: detail.grams_per_portion ? 'partial' : 'used',
+      grams_used: Number(detail.grams_per_portion || 0),
+      cost_impact: Number.isFinite(cost) ? cost : 0,
+      expiry_date: detail.expiry_date || null,
+      days_until_expiry: detail.days_until_expiry ?? null,
+    }
+  })
 }
 
 function RecipeCard({
@@ -301,7 +355,7 @@ function RecipeCard({
 
       <div className="p-8">
         <div className="flex items-start justify-between gap-3 mb-2">
-          <h3 className="text-2xl font-headline font-bold text-on-surface leading-tight">{meal.name}</h3>
+          <h3 className="text-2xl font-headline font-bold text-on-surface leading-tight">{prettyName(meal.name)}</h3>
           {/* Favourite star — persisted server-side via /api/profile/favourites,
               optimistic toggle via onToggleFavourite callback. */}
           <motion.button
@@ -351,7 +405,7 @@ function RecipeCard({
           <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
             <span className="material-symbols-outlined text-base">event_upcoming</span>
             <span className="truncate">
-              Use {meal.earliest_expiring_ingredient} first
+              Use {prettyName(meal.earliest_expiring_ingredient, 'this ingredient')} first
               {expiryHint ? ` · ${expiryHint}` : ''}
             </span>
           </div>
@@ -399,12 +453,12 @@ function RecipeCard({
                           ? 'inline-flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 cursor-default'
                           : 'inline-flex items-center gap-1 pl-2 pr-3 py-1 rounded-full text-xs font-semibold bg-surface-container-high text-on-surface hover:bg-primary/10 hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
                       }
-                      aria-label={added ? `${ing.name} is already in your list` : `Add ${ing.name} to shopping list`}
+                      aria-label={added ? `${prettyName(ing.name)} is already in your list` : `Add ${prettyName(ing.name)} to shopping list`}
                     >
                       <span className="material-symbols-outlined text-sm">
                         {added ? 'check' : 'add'}
                       </span>
-                      {ing.name}
+                      {prettyName(ing.name)}
                     </motion.button>
                   )
                 })}
@@ -463,7 +517,7 @@ function RecipeCard({
                         className={ing.inFridge ? 'text-on-surface' : 'text-on-surface-variant'}
                         style={{ fontWeight: ing.inFridge ? 500 : 400 }}
                       >
-                        {ing.name}
+                        {prettyName(ing.name)}
                       </span>
                       <span
                         className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -685,23 +739,35 @@ export default function MealsPage() {
   const handleMarkCooked = useCallback((meal) => {
     if (!meal) return
     setCookedRecipeIds((prev) => new Set(prev).add(meal.id))
+    const cookedDate = new Date().toISOString().slice(0, 10)
+    const ingredientUsage = buildCookedIngredientUsage(meal)
+    const totalUsedGrams = ingredientUsage.reduce(
+      (sum, item) => sum + Number(item.grams_used || 0),
+      0
+    )
 
     apiFetch('/api/waste/cooked-meals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipe_id: meal.id,
-        recipe_name: meal.name,
+        recipe_name: prettyName(meal.name),
         servings: 1,
-        quantity_grams: meal.costed_grams || 0,
-        cooked_date: new Date().toISOString().slice(0, 10),
+        quantity_grams: totalUsedGrams || meal.costed_grams || 0,
+        cooked_date: cookedDate,
         notes: meal.earliest_expiring_ingredient
-          ? `Used ${meal.earliest_expiring_ingredient}`
+          ? `Used ${prettyName(meal.earliest_expiring_ingredient, 'this ingredient')}`
           : null,
+        metadata: {
+          action: 'cooked',
+          cooked_time: currentTimeValue(),
+          ingredient_usage: ingredientUsage,
+          waste_log: null,
+        },
       }),
     })
       .then(() => {
-        toast.show({ message: `${meal.name} added to cooked meals` })
+        toast.show({ message: `${prettyName(meal.name)} added to cooked meals` })
       })
       .catch(() => {
         setCookedRecipeIds((prev) => {
