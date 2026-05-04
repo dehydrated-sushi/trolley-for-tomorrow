@@ -4,7 +4,7 @@ import json
 import re
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import inspect, text
+from sqlalchemy import bindparam, inspect, text
 
 from core.database import db
 from modules.nutrition.classifier import classify
@@ -403,6 +403,23 @@ def _round_kg(grams):
     return round(float(grams or 0) / 1000, 2)
 
 
+def _round_pct(value):
+    if value is None:
+        return None
+    return round(float(value), 1)
+
+
+def _safe_float(value, default=0.0):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_lookup_key(value):
+    return " ".join(str(value or "").strip().lower().split())
+
+
 def _empty_trends(start_date, days):
     return {
         (start_date + timedelta(days=offset)).isoformat(): {
@@ -411,9 +428,96 @@ def _empty_trends(start_date, days):
             "food_waste_kg": 0.0,
             "weight_kg": 0.0,
             "cost_impact": 0.0,
+            "inflation_adjusted_cost": 0.0,
+            "cooked_grams": 0.0,
+            "cooked_kg": 0.0,
+            "saved_grams": 0.0,
+            "saved_kg": 0.0,
+            "waste_events": 0,
+            "cooked_meals": 0,
         }
         for offset in range(days)
     }
+
+
+def _load_receipt_item_matches(receipt_item_ids):
+    ids = sorted({
+        int(receipt_item_id)
+        for receipt_item_id in receipt_item_ids
+        if receipt_item_id not in (None, "")
+    })
+    if not ids:
+        return {}
+
+    rows = db.session.execute(
+        text("""
+            SELECT id, name, matched_name
+            FROM receipt_items
+            WHERE id IN :ids
+        """).bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    ).fetchall()
+
+    return {
+        int(row._mapping["id"]): {
+            "name": row._mapping["name"],
+            "matched_name": row._mapping["matched_name"] or row._mapping["name"],
+        }
+        for row in rows
+    }
+
+
+def _load_food_reference_lookup(keys):
+    normalized = sorted({
+        _normalize_lookup_key(key)
+        for key in keys
+        if _normalize_lookup_key(key)
+    })
+    if not normalized:
+        return {}
+
+    rows = db.session.execute(
+        text("""
+            SELECT
+                ingredient_name,
+                canonical_name,
+                cpi_category,
+                latest_cpi_index,
+                cpi_monthly_pct_change,
+                cpi_annual_pct_change
+            FROM food_reference
+            WHERE lower(ingredient_name) IN :keys
+               OR lower(canonical_name) IN :keys
+        """).bindparams(bindparam("keys", expanding=True)),
+        {"keys": normalized},
+    ).fetchall()
+
+    lookup = {}
+    for row in rows:
+        item = dict(row._mapping)
+        ingredient_key = _normalize_lookup_key(item.get("ingredient_name"))
+        canonical_key = _normalize_lookup_key(item.get("canonical_name"))
+        if ingredient_key:
+            lookup[ingredient_key] = item
+        if canonical_key:
+            lookup[canonical_key] = item
+    return lookup
+
+
+def _food_reference_for_event(event, receipt_item_lookup, food_reference_lookup):
+    candidates = []
+    receipt_item_id = event.get("receipt_item_id")
+    if receipt_item_id in receipt_item_lookup:
+        receipt_item = receipt_item_lookup[receipt_item_id]
+        candidates.append(receipt_item.get("matched_name"))
+        candidates.append(receipt_item.get("name"))
+    candidates.append(event.get("item_name"))
+
+    for candidate in candidates:
+        key = _normalize_lookup_key(candidate)
+        if key and key in food_reference_lookup:
+            return food_reference_lookup[key]
+    return None
 
 
 def _load_at_risk_items(today):
@@ -714,6 +818,15 @@ def get_waste_analytics():
         db.session.rollback()
         return jsonify({"error": str(exc)}), 500
 
+    receipt_item_lookup = _load_receipt_item_matches(
+        [row._mapping.get("receipt_item_id") for row in rows]
+    )
+    food_reference_lookup = _load_food_reference_lookup([
+        *(row._mapping.get("item_name") for row in rows),
+        *(item.get("matched_name") for item in receipt_item_lookup.values()),
+        *(item.get("name") for item in receipt_item_lookup.values()),
+    ])
+
     current_waste = []
     previous_waste = []
     current_cooked = []
@@ -725,7 +838,33 @@ def get_waste_analytics():
         "times_wasted": 0,
         "weight_grams": 0.0,
         "cost_impact": 0.0,
+        "inflation_adjusted_cost": 0.0,
+        "annual_cpi_pct": None,
+        "cpi_category": None,
     })
+    reason_totals = defaultdict(lambda: {"count": 0, "weight_grams": 0.0, "cost_impact": 0.0})
+    type_totals = defaultdict(lambda: {"count": 0, "weight_grams": 0.0, "cost_impact": 0.0})
+    meal_outcomes = defaultdict(lambda: {
+        "recipe_name": "",
+        "cooked_grams": 0.0,
+        "wasted_grams": 0.0,
+        "cost_impact": 0.0,
+        "waste_events": 0,
+        "event_date": None,
+    })
+    inflation_hotspots = defaultdict(lambda: {
+        "cpi_category": None,
+        "annual_cpi_pct": None,
+        "weight_grams": 0.0,
+        "cost_impact": 0.0,
+        "inflation_adjusted_cost": 0.0,
+        "times_wasted": 0,
+    })
+    matched_cpi_events = 0
+    matched_cpi_cost = 0.0
+    weighted_cpi_sum = 0.0
+    inflation_adjusted_loss = 0.0
+    expired_grams = 0.0
 
     for row in rows:
         event = dict(row._mapping)
@@ -733,12 +872,31 @@ def get_waste_analytics():
         event_type = event["event_type"]
         grams = float(event["quantity_grams"] or 0)
         cost = float(event["cost_impact"] or 0)
+        metadata_raw = event.get("metadata_json")
+        try:
+            metadata = json.loads(metadata_raw or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        event["metadata"] = metadata
+        food_reference = _food_reference_for_event(
+            event,
+            receipt_item_lookup,
+            food_reference_lookup,
+        )
+        annual_cpi_pct = None
+        monthly_cpi_pct = None
+        cpi_category = None
+        inflation_cost = cost
+        if food_reference:
+            annual_cpi_pct = _safe_float(food_reference.get("cpi_annual_pct_change"), None)
+            monthly_cpi_pct = _safe_float(food_reference.get("cpi_monthly_pct_change"), None)
+            cpi_category = food_reference.get("cpi_category")
+            if annual_cpi_pct is not None:
+                inflation_cost = cost * max(0, 1 + (annual_cpi_pct / 100))
+            else:
+                inflation_cost = cost
 
         if event_date >= current_start and event_type == "cooked":
-            try:
-                metadata = json.loads(event.get("metadata_json") or "{}")
-            except (TypeError, ValueError):
-                metadata = {}
             cooked_event = {
                 **event,
                 "event_date": event_date.isoformat(),
@@ -749,12 +907,25 @@ def get_waste_analytics():
                 ),
                 "quantity_grams": grams,
                 "cost_impact": cost,
+                "inflation_adjusted_cost": _round_money(inflation_cost),
                 "metadata": metadata,
             }
             current_cooked.append(cooked_event)
+            cooked_key = event_date.isoformat()
+            if cooked_key in trends:
+                trends[cooked_key]["cooked_grams"] += grams
+                trends[cooked_key]["cooked_kg"] = _round_kg(trends[cooked_key]["cooked_grams"])
+                trends[cooked_key]["cooked_meals"] += 1
+            meal_outcomes[event["id"]]["recipe_name"] = event["recipe_name"] or event["item_name"]
+            meal_outcomes[event["id"]]["cooked_grams"] += grams
+            meal_outcomes[event["id"]]["event_date"] = event_date.isoformat()
 
         if event_type in {"cooked", "saved_leftover"} and event_date >= current_start:
             saved_events.append(event)
+            day_key = event_date.isoformat()
+            if day_key in trends:
+                trends[day_key]["saved_grams"] += grams
+                trends[day_key]["saved_kg"] = _round_kg(trends[day_key]["saved_grams"])
 
         if event_type not in WASTE_EVENT_TYPES:
             continue
@@ -767,12 +938,42 @@ def get_waste_analytics():
         category = event["category"] or classify(event["item_name"])
         category_totals[category]["weight_grams"] += grams
         category_totals[category]["cost_impact"] += cost
+        if event_type == "expired":
+            expired_grams += grams
+
+        reason_key = (event.get("reason") or ("Expired" if event_type == "expired" else "Wasted")).strip()
+        reason_totals[reason_key]["count"] += 1
+        reason_totals[reason_key]["weight_grams"] += grams
+        reason_totals[reason_key]["cost_impact"] += cost
+
+        type_totals[event_type]["count"] += 1
+        type_totals[event_type]["weight_grams"] += grams
+        type_totals[event_type]["cost_impact"] += cost
 
         key = " ".join(str(event["item_name"]).strip().lower().split())
         item_totals[key]["category"] = category
         item_totals[key]["times_wasted"] += 1
         item_totals[key]["weight_grams"] += grams
         item_totals[key]["cost_impact"] += cost
+        item_totals[key]["inflation_adjusted_cost"] += inflation_cost
+        if annual_cpi_pct is not None:
+            item_totals[key]["annual_cpi_pct"] = annual_cpi_pct
+        if cpi_category:
+            item_totals[key]["cpi_category"] = cpi_category
+
+        if annual_cpi_pct is not None or cpi_category:
+            matched_cpi_events += 1
+            matched_cpi_cost += cost
+            weighted_cpi_sum += (annual_cpi_pct or 0) * cost
+            inflation_adjusted_loss += inflation_cost
+
+            inflation_key = key
+            inflation_hotspots[inflation_key]["cpi_category"] = cpi_category or "Unmapped"
+            inflation_hotspots[inflation_key]["annual_cpi_pct"] = annual_cpi_pct
+            inflation_hotspots[inflation_key]["weight_grams"] += grams
+            inflation_hotspots[inflation_key]["cost_impact"] += cost
+            inflation_hotspots[inflation_key]["inflation_adjusted_cost"] += inflation_cost
+            inflation_hotspots[inflation_key]["times_wasted"] += 1
 
         day_key = event_date.isoformat()
         if day_key in trends:
@@ -780,11 +981,37 @@ def get_waste_analytics():
             trends[day_key]["food_waste_kg"] = _round_kg(trends[day_key]["weight_grams"])
             trends[day_key]["weight_kg"] = trends[day_key]["food_waste_kg"]
             trends[day_key]["cost_impact"] = _round_money(trends[day_key]["cost_impact"] + cost)
+            trends[day_key]["inflation_adjusted_cost"] = _round_money(
+                trends[day_key]["inflation_adjusted_cost"] + inflation_cost
+            )
+            trends[day_key]["waste_events"] += 1
+
+        cooked_event_id = metadata.get("cooked_event_id")
+        try:
+            cooked_event_id = int(cooked_event_id)
+        except (TypeError, ValueError):
+            cooked_event_id = None
+        if cooked_event_id:
+            meal_outcomes[cooked_event_id]["recipe_name"] = event.get("recipe_name") or event["item_name"]
+            meal_outcomes[cooked_event_id]["wasted_grams"] += grams
+            meal_outcomes[cooked_event_id]["cost_impact"] += cost
+            meal_outcomes[cooked_event_id]["waste_events"] += 1
 
     current_grams = sum(float(event["quantity_grams"] or 0) for event in current_waste)
     current_cost = sum(float(event["cost_impact"] or 0) for event in current_waste)
     previous_grams = sum(float(event["quantity_grams"] or 0) for event in previous_waste)
     saved_grams = sum(float(event["quantity_grams"] or 0) for event in saved_events)
+    cooked_grams = sum(float(event["quantity_grams"] or 0) for event in current_cooked)
+    average_waste_event_grams = (current_grams / len(current_waste)) if current_waste else 0
+    waste_rate_pct = (current_grams / cooked_grams * 100) if cooked_grams > 0 else None
+    expiry_driven_pct = (expired_grams / current_grams * 100) if current_grams > 0 else None
+    inflation_adjusted_loss = inflation_adjusted_loss or current_cost
+    inflation_risk_premium = max(0, inflation_adjusted_loss - current_cost)
+    avg_annual_cpi_pct = (
+        weighted_cpi_sum / matched_cpi_cost
+        if matched_cpi_cost > 0
+        else None
+    )
 
     if previous_grams > 0:
         comparison_pct = round(((current_grams - previous_grams) / previous_grams) * 100, 1)
@@ -812,10 +1039,55 @@ def get_waste_analytics():
             "weight_grams": round(values["weight_grams"], 1),
             "weight_kg": _round_kg(values["weight_grams"]),
             "cost_impact": _round_money(values["cost_impact"]),
+            "inflation_adjusted_cost": _round_money(values["inflation_adjusted_cost"]),
+            "annual_cpi_pct": _round_pct(values["annual_cpi_pct"]),
+            "cpi_category": values["cpi_category"],
         })
     top_items.sort(key=lambda item: (-item["cost_impact"], -item["weight_grams"], item["name"]))
 
+    waste_by_reason = [
+        {
+            "reason": reason,
+            "count": values["count"],
+            "weight_grams": round(values["weight_grams"], 1),
+            "weight_kg": _round_kg(values["weight_grams"]),
+            "cost_impact": _round_money(values["cost_impact"]),
+        }
+        for reason, values in reason_totals.items()
+    ]
+    waste_by_reason.sort(key=lambda item: (-item["weight_grams"], -item["count"], item["reason"]))
+
+    waste_by_type = [
+        {
+            "event_type": event_type,
+            "count": values["count"],
+            "weight_grams": round(values["weight_grams"], 1),
+            "weight_kg": _round_kg(values["weight_grams"]),
+            "cost_impact": _round_money(values["cost_impact"]),
+        }
+        for event_type, values in type_totals.items()
+    ]
+    waste_by_type.sort(key=lambda item: (-item["weight_grams"], item["event_type"]))
+
+    inflation_hotspot_rows = []
+    for name, values in inflation_hotspots.items():
+        inflation_hotspot_rows.append({
+            "name": name,
+            "cpi_category": values["cpi_category"] or "Unmapped",
+            "annual_cpi_pct": _round_pct(values["annual_cpi_pct"]),
+            "weight_grams": round(values["weight_grams"], 1),
+            "weight_kg": _round_kg(values["weight_grams"]),
+            "cost_impact": _round_money(values["cost_impact"]),
+            "inflation_adjusted_cost": _round_money(values["inflation_adjusted_cost"]),
+            "inflation_risk_premium": _round_money(values["inflation_adjusted_cost"] - values["cost_impact"]),
+            "times_wasted": values["times_wasted"],
+        })
+    inflation_hotspot_rows.sort(
+        key=lambda item: (-item["inflation_risk_premium"], -item["cost_impact"], item["name"])
+    )
+
     at_risk_items = _load_at_risk_items(today)
+    at_risk_value = sum(_safe_float(item.get("price")) for item in at_risk_items)
     insights = []
     if breakdown:
         top_category = breakdown[0]
@@ -827,6 +1099,15 @@ def get_waste_analytics():
             insights.append(f"Waste is down {abs(comparison_pct)}% compared with the previous period.")
         elif comparison_pct > 0:
             insights.append(f"Waste is up {comparison_pct}% compared with the previous period.")
+    if waste_rate_pct is not None:
+        insights.append(f"{round(waste_rate_pct, 1)}% of cooked food ended up logged as waste in this period.")
+    if inflation_hotspot_rows:
+        hotspot = inflation_hotspot_rows[0]
+        insights.append(
+            f"{hotspot['name']} is your biggest inflation-sensitive waste item, with an estimated rebuy premium of ${hotspot['inflation_risk_premium']:.2f}."
+        )
+    if expiry_driven_pct is not None and expiry_driven_pct > 0:
+        insights.append(f"{round(expiry_driven_pct, 1)}% of current waste was expiry-driven.")
     if at_risk_items:
         first = at_risk_items[0]
         insights.append(
@@ -850,6 +1131,33 @@ def get_waste_analytics():
     for meal in cooked_meals:
         meal["metadata"]["waste_history"] = waste_history.get(meal["event_id"], [])
 
+    meal_outcome_rows = []
+    for meal_id, values in meal_outcomes.items():
+        cooked_weight = values["cooked_grams"]
+        wasted_weight = values["wasted_grams"]
+        meal_outcome_rows.append({
+            "event_id": meal_id,
+            "recipe_name": values["recipe_name"] or "Meal",
+            "event_date": values["event_date"],
+            "cooked_grams": round(cooked_weight, 1),
+            "cooked_kg": _round_kg(cooked_weight),
+            "wasted_grams": round(wasted_weight, 1),
+            "wasted_kg": _round_kg(wasted_weight),
+            "waste_pct": _round_pct((wasted_weight / cooked_weight * 100) if cooked_weight > 0 else 0),
+            "cost_impact": _round_money(values["cost_impact"]),
+            "waste_events": values["waste_events"],
+        })
+    meal_outcome_rows.sort(
+        key=lambda item: (-_safe_float(item["wasted_grams"]), -_safe_float(item["waste_pct"]), item["recipe_name"])
+    )
+
+    most_wasted_day = None
+    trend_rows = list(trends.values())
+    if trend_rows:
+        most_wasted_day = max(trend_rows, key=lambda item: item["weight_grams"])
+        if _safe_float(most_wasted_day.get("weight_grams")) <= 0:
+            most_wasted_day = None
+
     return jsonify({
         "period": {
             "days": days,
@@ -862,17 +1170,36 @@ def get_waste_analytics():
             "total_wasted_grams": round(current_grams, 1),
             "total_wasted_kg": _round_kg(current_grams),
             "money_lost": _round_money(current_cost),
+            "inflation_adjusted_loss": _round_money(inflation_adjusted_loss),
+            "inflation_risk_premium": _round_money(inflation_risk_premium),
             "co2_impact_kg": round((current_grams / 1000) * CO2_KG_PER_FOOD_KG, 2),
             "saved_from_waste_grams": round(saved_grams, 1),
             "saved_from_waste_kg": _round_kg(saved_grams),
             "comparison_to_last_period_pct": comparison_pct,
             "cooked_meal_count": len(current_cooked),
+            "waste_event_count": len(current_waste),
+            "average_waste_event_grams": round(average_waste_event_grams, 1),
+            "waste_rate_pct": _round_pct(waste_rate_pct),
+            "expiry_driven_pct": _round_pct(expiry_driven_pct),
+            "at_risk_value": _round_money(at_risk_value),
+            "most_wasted_day": most_wasted_day,
+        },
+        "cpi_summary": {
+            "matched_waste_events": matched_cpi_events,
+            "matched_cost": _round_money(matched_cpi_cost),
+            "average_annual_cpi_pct": _round_pct(avg_annual_cpi_pct),
+            "inflation_adjusted_loss": _round_money(inflation_adjusted_loss),
+            "inflation_risk_premium": _round_money(inflation_risk_premium),
         },
         "cooked_meals": cooked_meals,
         "waste_breakdown": breakdown,
         "top_wasted_items": top_items[:6],
-        "trends": list(trends.values()),
-        "smart_insights": insights[:4],
+        "waste_by_reason": waste_by_reason[:6],
+        "waste_by_type": waste_by_type,
+        "meal_outcomes": meal_outcome_rows[:6],
+        "inflation_hotspots": inflation_hotspot_rows[:6],
+        "trends": trend_rows,
+        "smart_insights": insights[:6],
         "at_risk_items": at_risk_items,
         "quick_actions": [
             {"key": "log_food_waste", "label": "Log Food Waste"},
