@@ -246,6 +246,43 @@ def _cooked_meal_to_dict(row):
     return _cooked_meal_from_event(_event_to_dict(row))
 
 
+def _load_cooked_waste_history(cooked_event_ids, start_date=None):
+    cooked_event_ids = {
+        int(event_id)
+        for event_id in cooked_event_ids
+        if event_id not in (None, "")
+    }
+    if not cooked_event_ids:
+        return {}
+
+    params = {}
+    date_filter = ""
+    if start_date is not None:
+        date_filter = "AND event_date >= :start_date"
+        params["start_date"] = start_date
+
+    rows = db.session.execute(text(f"""
+        SELECT *
+        FROM waste_events
+        WHERE event_type IN ('wasted', 'expired')
+          AND metadata_json IS NOT NULL
+          {date_filter}
+        ORDER BY event_date ASC, created_at ASC
+    """), params).fetchall()
+
+    grouped = defaultdict(list)
+    for row in rows:
+        event = _event_to_dict(row)
+        cooked_event_id = (event.get("metadata") or {}).get("cooked_event_id")
+        try:
+            cooked_event_id = int(cooked_event_id)
+        except (TypeError, ValueError):
+            continue
+        if cooked_event_id in cooked_event_ids:
+            grouped[cooked_event_id].append(event)
+    return grouped
+
+
 def _date_from_row(value):
     if hasattr(value, "date"):
         return value.date()
@@ -406,8 +443,15 @@ def list_cooked_meals():
               AND event_date >= :start_date
             ORDER BY event_date DESC, created_at DESC
         """), {"start_date": start_date}).fetchall()
+        cooked_meals = [_cooked_meal_to_dict(row) for row in rows]
+        waste_history = _load_cooked_waste_history(
+            [meal["event_id"] for meal in cooked_meals],
+            start_date=start_date,
+        )
+        for meal in cooked_meals:
+            meal["metadata"]["waste_history"] = waste_history.get(meal["event_id"], [])
         return jsonify({
-            "cooked_meals": [_cooked_meal_to_dict(row) for row in rows]
+            "cooked_meals": cooked_meals
         }), 200
     except ValueError:
         return jsonify({"error": "days must be an integer"}), 400
@@ -442,6 +486,8 @@ def create_waste_event():
             return jsonify({"error": str(exc)}), 400
 
         category = (payload.get("category") or "").strip() or classify(item_name)
+
+        metadata = payload.get("metadata") or {}
 
         inserted = db.session.execute(text("""
             INSERT INTO waste_events (
@@ -487,12 +533,26 @@ def create_waste_event():
             "quantity_label": (payload.get("quantity_label") or "").strip() or None,
             "cost_impact": cost_impact or 0,
             "reason": (payload.get("reason") or "").strip() or None,
-            "metadata_json": json.dumps(payload.get("metadata") or {}),
+            "metadata_json": json.dumps(metadata),
             "event_date": event_date,
         }).fetchone()
+        inventory_updates = []
+        if (
+            event_type in WASTE_EVENT_TYPES
+            and receipt_item_id
+            and quantity_grams
+            and not metadata.get("skip_inventory_update")
+        ):
+            inventory_updates = _decrement_fridge_items([{
+                "receipt_item_id": receipt_item_id,
+                "grams_used": quantity_grams,
+            }])
         db.session.commit()
 
-        return jsonify({"event": _event_to_dict(inserted)}), 201
+        return jsonify({
+            "event": _event_to_dict(inserted),
+            "inventory_updates": inventory_updates,
+        }), 201
 
     except Exception as exc:
         db.session.rollback()
@@ -671,6 +731,21 @@ def get_waste_analytics():
     if not insights:
         insights.append("No logged waste yet. Start logging cooked and wasted items to unlock insights.")
 
+    cooked_meals = [
+        _cooked_meal_from_event(event)
+        for event in sorted(
+            current_cooked,
+            key=lambda item: (item["event_date"], item["created_at"]),
+            reverse=True,
+        )
+    ]
+    waste_history = _load_cooked_waste_history(
+        [meal["event_id"] for meal in cooked_meals],
+        start_date=current_start,
+    )
+    for meal in cooked_meals:
+        meal["metadata"]["waste_history"] = waste_history.get(meal["event_id"], [])
+
     return jsonify({
         "period": {
             "days": days,
@@ -689,14 +764,7 @@ def get_waste_analytics():
             "comparison_to_last_period_pct": comparison_pct,
             "cooked_meal_count": len(current_cooked),
         },
-        "cooked_meals": [
-            _cooked_meal_from_event(event)
-            for event in sorted(
-                current_cooked,
-                key=lambda item: (item["event_date"], item["created_at"]),
-                reverse=True,
-            )
-        ],
+        "cooked_meals": cooked_meals,
         "waste_breakdown": breakdown,
         "top_wasted_items": top_items[:6],
         "trends": list(trends.values()),
