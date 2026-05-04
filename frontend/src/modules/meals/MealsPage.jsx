@@ -48,30 +48,71 @@ function currentTimeValue() {
   return new Date().toTimeString().slice(0, 5)
 }
 
+function ingredientUsageKey(ingredient) {
+  return String(
+    ingredient.receipt_item_id
+      || ingredient.fridge_item
+      || ingredient.display_name
+      || ingredient.name
+      || 'ingredient'
+  ).trim().toLowerCase()
+}
+
 function buildCookedIngredientUsage(meal) {
-  return (meal?.matched_ingredients || []).map((ingredient) => {
+  const grouped = new Map()
+
+  for (const ingredient of meal?.matched_ingredients || []) {
     const name = ingredient.name || ingredient.fridge_item || 'Ingredient'
+    const displayName = ingredient.fridge_item || name
     const gramsUsed = Number(ingredient.grams_per_portion || 0)
     const pricePerGram = Number(ingredient.price_per_gram || 0)
     const estimatedCost = Number.isFinite(pricePerGram) && pricePerGram > 0
       ? gramsUsed * pricePerGram
       : Number(ingredient.estimated_cost || 0)
+    const key = ingredientUsageKey(ingredient)
 
-    return {
-      name,
-      display_name: ingredient.fridge_item || name,
-      fridge_item: ingredient.fridge_item || name,
-      category: ingredient.category || 'other',
-      receipt_item_id: ingredient.receipt_item_id || null,
-      grams_used: Number.isFinite(gramsUsed) ? Math.max(0, gramsUsed) : 0,
-      quantity_grams: Number.isFinite(gramsUsed) ? Math.max(0, gramsUsed) : 0,
-      estimated_cost: Number.isFinite(estimatedCost) ? Math.max(0, estimatedCost) : 0,
-      price_per_gram: Number.isFinite(pricePerGram) && pricePerGram > 0 ? pricePerGram : null,
-      expiry_date: ingredient.expiry_date || null,
-      days_until_expiry: ingredient.days_until_expiry ?? null,
-      weight_confidence: ingredient.weight_confidence || null,
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        name: displayName,
+        display_name: displayName,
+        fridge_item: displayName,
+        category: ingredient.category || 'other',
+        receipt_item_id: ingredient.receipt_item_id || null,
+        grams_used: 0,
+        quantity_grams: 0,
+        estimated_cost: 0,
+        price_per_gram: Number.isFinite(pricePerGram) && pricePerGram > 0 ? pricePerGram : null,
+        expiry_date: ingredient.expiry_date || null,
+        days_until_expiry: ingredient.days_until_expiry ?? null,
+        weight_confidence: ingredient.weight_confidence || null,
+        recipe_ingredients: [],
+      })
     }
-  })
+
+    const row = grouped.get(key)
+    const safeGrams = Number.isFinite(gramsUsed) ? Math.max(0, gramsUsed) : 0
+    const safeCost = Number.isFinite(estimatedCost) ? Math.max(0, estimatedCost) : 0
+    row.grams_used += safeGrams
+    row.quantity_grams += safeGrams
+    row.estimated_cost += safeCost
+    if (name && !row.recipe_ingredients.includes(name)) {
+      row.recipe_ingredients.push(name)
+    }
+    if (!row.expiry_date && ingredient.expiry_date) {
+      row.expiry_date = ingredient.expiry_date
+      row.days_until_expiry = ingredient.days_until_expiry ?? null
+    }
+    if (row.category === 'other' && ingredient.category) {
+      row.category = ingredient.category
+    }
+  }
+
+  return Array.from(grouped.values()).map((row) => ({
+    ...row,
+    grams_used: Math.round(row.grams_used * 100) / 100,
+    quantity_grams: Math.round(row.quantity_grams * 100) / 100,
+    estimated_cost: Math.round(row.estimated_cost * 100) / 100,
+  }))
 }
 
 /** Dominant category across the full ingredient list (for hero tint). */

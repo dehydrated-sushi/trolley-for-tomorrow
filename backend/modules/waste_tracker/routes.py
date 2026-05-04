@@ -221,8 +221,112 @@ def _event_to_dict(row):
     return m
 
 
+def _ingredient_usage_key(ingredient):
+    return str(
+        ingredient.get("receipt_item_id")
+        or ingredient.get("fridge_item")
+        or ingredient.get("display_name")
+        or ingredient.get("name")
+        or ingredient.get("item")
+        or ingredient.get("recipe_ingredient")
+        or "ingredient"
+    ).strip().lower()
+
+
+def _ingredient_usage_grams(ingredient):
+    try:
+        return float(
+            ingredient.get("grams_used")
+            or ingredient.get("quantity_grams")
+            or 0
+        )
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _ingredient_usage_cost(ingredient):
+    try:
+        cost = float(
+            ingredient.get("estimated_cost")
+            or ingredient.get("cost_impact")
+            or 0
+        )
+    except (TypeError, ValueError):
+        cost = 0.0
+    if cost > 0:
+        return cost
+
+    try:
+        grams = _ingredient_usage_grams(ingredient)
+        price_per_gram = float(ingredient.get("price_per_gram") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return grams * price_per_gram if grams > 0 and price_per_gram > 0 else 0.0
+
+
+def _aggregate_ingredient_usage(ingredient_usage):
+    grouped = {}
+    order = []
+    for ingredient in ingredient_usage or []:
+        if not isinstance(ingredient, dict):
+            continue
+        key = _ingredient_usage_key(ingredient)
+        if key not in grouped:
+            display_name = (
+                ingredient.get("display_name")
+                or ingredient.get("fridge_item")
+                or ingredient.get("name")
+                or ingredient.get("item")
+                or ingredient.get("recipe_ingredient")
+            )
+            grouped[key] = {
+                **ingredient,
+                "name": display_name,
+                "display_name": display_name,
+                "grams_used": 0.0,
+                "quantity_grams": 0.0,
+                "estimated_cost": 0.0,
+                "cost_impact": 0.0,
+                "recipe_ingredients": [],
+            }
+            order.append(key)
+
+        row = grouped[key]
+        grams = _ingredient_usage_grams(ingredient)
+        cost = _ingredient_usage_cost(ingredient)
+        row["grams_used"] += grams
+        row["quantity_grams"] += grams
+        row["estimated_cost"] += cost
+        row["cost_impact"] += cost
+
+        recipe_ingredient = ingredient.get("recipe_ingredient") or ingredient.get("name")
+        if recipe_ingredient and recipe_ingredient not in row["recipe_ingredients"]:
+            row["recipe_ingredients"].append(recipe_ingredient)
+
+        if row.get("category") in (None, "", "other") and ingredient.get("category"):
+            row["category"] = ingredient["category"]
+        if not row.get("expiry_date") and ingredient.get("expiry_date"):
+            row["expiry_date"] = ingredient["expiry_date"]
+
+    return [
+        {
+            **grouped[key],
+            "grams_used": round(grouped[key]["grams_used"], 2),
+            "quantity_grams": round(grouped[key]["quantity_grams"], 2),
+            "estimated_cost": round(grouped[key]["estimated_cost"], 2),
+            "cost_impact": round(grouped[key]["cost_impact"], 2),
+        }
+        for key in order
+    ]
+
+
 def _cooked_meal_from_event(event):
     metadata = event.get("metadata") or {}
+    ingredient_usage = _aggregate_ingredient_usage(metadata.get("ingredient_usage", []))
+    metadata = {
+        **metadata,
+        "ingredient_usage": ingredient_usage,
+    }
     return {
         "id": event["id"],
         "event_id": event["id"],
@@ -236,7 +340,7 @@ def _cooked_meal_from_event(event):
         "created_at": event["created_at"],
         "notes": event.get("reason"),
         "metadata": metadata,
-        "ingredient_usage": metadata.get("ingredient_usage", []),
+        "ingredient_usage": ingredient_usage,
         "action": metadata.get("action", "cooked"),
         "waste_log": metadata.get("waste_log"),
     }
