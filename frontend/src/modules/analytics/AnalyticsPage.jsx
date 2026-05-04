@@ -25,6 +25,10 @@ function formatDate(value) {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
+function trendValue(item) {
+  return Number(item.weight_kg ?? item.food_waste_kg ?? 0)
+}
+
 function SummaryCard({ icon, label, value, detail, tone = 'primary' }) {
   const toneClass = tone === 'amber'
     ? 'bg-amber-100 text-amber-700'
@@ -75,25 +79,41 @@ function BreakdownBar({ item, total }) {
   )
 }
 
-function TrendBars({ trends }) {
-  const max = Math.max(...trends.map((item) => Number(item.weight_kg || 0)), 0.01)
+function TrendBars({ trends, days }) {
+  const max = Math.max(...trends.map((item) => trendValue(item)), 0.01)
+  const scrollable = days >= 30
+  const barWidth = days >= 60 ? 34 : 42
+  const gap = days >= 60 ? 12 : 14
+  const minChartWidth = scrollable
+    ? `${Math.max(trends.length * (barWidth + gap), days >= 60 ? 1800 : 1280)}px`
+    : undefined
+
   return (
-    <div className="h-48 flex items-end gap-2">
+    <div className={scrollable ? 'overflow-x-auto pb-3' : ''}>
+      <div
+        className="h-48 flex items-end"
+        style={scrollable ? { minWidth: minChartWidth, gap: `${gap}px` } : { gap: '0.5rem' }}
+      >
       {trends.map((item) => {
-        const value = Number(item.weight_kg || 0)
+        const value = trendValue(item)
         return (
-          <div key={item.date} className="flex-1 min-w-0 flex flex-col items-center gap-2">
+          <div
+            key={`${item.date}-${item.end_date || item.date}`}
+            className="flex flex-col items-center gap-2"
+            style={scrollable ? { width: `${barWidth}px`, flex: `0 0 ${barWidth}px` } : { flex: '1 1 0', minWidth: 0 }}
+          >
             <div className="w-full h-36 flex items-end rounded-xl bg-surface-container-low overflow-hidden">
               <div
                 className="w-full rounded-t-xl bg-primary/80"
                 style={{ height: `${Math.max(4, (value / max) * 100)}%` }}
-                title={`${formatDate(item.date)} · ${kg(value)}`}
+                title={`${item.title || formatDate(item.date)} · ${kg(value)}`}
               />
             </div>
-            <span className="text-[10px] text-on-surface-variant truncate">{formatDate(item.date)}</span>
+            <span className="text-[10px] text-on-surface-variant truncate">{item.label || formatDate(item.date)}</span>
           </div>
         )
       })}
+      </div>
     </div>
   )
 }
@@ -156,6 +176,11 @@ export default function AnalyticsPage() {
     () => breakdown.reduce((sum, item) => sum + Number(item.weight_grams || 0), 0),
     [breakdown]
   )
+  const trendSubtitle = days >= 60
+    ? 'Food waste by day, scroll horizontally to see the full period'
+    : days >= 30
+      ? 'Food waste by day, scroll horizontally for more spacing'
+      : 'Food waste by day'
 
   return (
     <div className="px-6 md:px-12 max-w-7xl mx-auto pb-12">
@@ -242,7 +267,7 @@ export default function AnalyticsPage() {
                   <div className="flex items-center justify-between gap-3 mb-5">
                     <div>
                       <h2 className="font-headline text-xl font-bold text-on-surface">Trends over time</h2>
-                      <p className="text-sm text-on-surface-variant">Food waste by day</p>
+                      <p className="text-sm text-on-surface-variant">{trendSubtitle}</p>
                     </div>
                     {summary.comparison_to_last_period_pct != null && (
                       <span className="rounded-full bg-emerald-50 text-emerald-800 px-3 py-1 text-xs font-bold">
@@ -251,7 +276,7 @@ export default function AnalyticsPage() {
                       </span>
                     )}
                   </div>
-                  <TrendBars trends={trends} />
+                  <TrendBars trends={trends} days={days} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
