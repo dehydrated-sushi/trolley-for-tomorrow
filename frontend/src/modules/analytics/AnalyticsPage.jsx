@@ -5,26 +5,6 @@ import { apiFetch } from '../../lib/api'
 import { getCategoryInfo } from '../../shared/nutrition'
 
 const EASE = [0.22, 1, 0.36, 1]
-const SMALL_NAME_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'from', 'in', 'of', 'on', 'or', 'the', 'to', 'with'])
-
-function prettyName(value, fallback = 'Unknown item') {
-  const clean = String(value || '')
-    .replace(/[_|]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (!clean) return fallback
-
-  return clean
-    .split(' ')
-    .map((word, index) => {
-      const lower = word.toLowerCase()
-      if (index > 0 && SMALL_NAME_WORDS.has(lower)) return lower
-      if (/^[A-Z0-9]{2,}$/.test(word)) return word
-      return lower.charAt(0).toUpperCase() + lower.slice(1)
-    })
-    .join(' ')
-}
 
 function kg(value) {
   const number = Number(value)
@@ -38,28 +18,11 @@ function money(value) {
   return `$${number.toFixed(2)}`
 }
 
-function percent(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '0%'
-  return `${number.toFixed(number >= 10 ? 0 : 1)}%`
-}
-
-function grams(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return '0 g'
-  if (number >= 1000) return `${(number / 1000).toFixed(number >= 10000 ? 1 : 2)} kg`
-  return `${Math.round(number)} g`
-}
-
 function formatDate(value) {
   if (!value) return ''
   const date = new Date(`${value}T00:00:00`)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-}
-
-function trendValue(item) {
-  return Number(item.weight_kg ?? item.food_waste_kg ?? 0)
 }
 
 function SummaryCard({ icon, label, value, detail, tone = 'primary' }) {
@@ -90,8 +53,7 @@ function SummaryCard({ icon, label, value, detail, tone = 'primary' }) {
 
 function BreakdownBar({ item, total }) {
   const info = getCategoryInfo(item.category)
-  const rawPct = total > 0 ? (Number(item.weight_grams || 0) / total) * 100 : 0
-  const pct = rawPct > 0 ? Math.max(3, rawPct) : 0
+  const pct = total > 0 ? Math.max(3, (Number(item.weight_grams || 0) / total) * 100) : 0
   return (
     <div>
       <div className="flex items-center justify-between gap-3 text-sm mb-1.5">
@@ -101,9 +63,7 @@ function BreakdownBar({ item, total }) {
           </span>
           {info.label}
         </span>
-        <span className="text-on-surface-variant tabular-nums">
-          {kg(item.weight_kg)} · {percent(rawPct)}
-        </span>
+        <span className="text-on-surface-variant tabular-nums">{kg(item.weight_kg)}</span>
       </div>
       <div className="h-2.5 rounded-full bg-surface-container overflow-hidden">
         <div
@@ -115,98 +75,25 @@ function BreakdownBar({ item, total }) {
   )
 }
 
-function MetricTile({ icon, label, value, detail, tone = 'primary' }) {
-  const toneClass = tone === 'rose'
-    ? 'bg-rose-50 text-rose-700'
-    : tone === 'amber'
-      ? 'bg-amber-50 text-amber-700'
-      : tone === 'sky'
-        ? 'bg-sky-50 text-sky-700'
-        : 'bg-emerald-50 text-emerald-700'
-
+function TrendBars({ trends }) {
+  const max = Math.max(...trends.map((item) => Number(item.weight_kg || 0)), 0.01)
   return (
-    <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className={`material-symbols-outlined rounded-xl p-2 ${toneClass}`}>{icon}</span>
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-black">{label}</p>
-          <p className="mt-1 text-xl font-black text-on-surface">{value}</p>
-        </div>
-      </div>
-      {detail && <p className="mt-3 text-xs font-semibold leading-relaxed text-on-surface-variant">{detail}</p>}
-    </div>
-  )
-}
-
-function SavedVsWastedMeter({ savedKg, wastedKg }) {
-  const total = savedKg + wastedKg
-  const savedPct = total > 0 ? (savedKg / total) * 100 : 0
-  const wastedPct = total > 0 ? (wastedKg / total) * 100 : 0
-
-  return (
-    <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-headline text-xl font-bold text-on-surface">Food saved vs wasted</h2>
-          <p className="text-sm text-on-surface-variant">How much cooked food was rescued compared with logged waste.</p>
-        </div>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">
-          {percent(savedPct)} saved
-        </span>
-      </div>
-      <div className="mt-5 flex h-4 overflow-hidden rounded-full bg-surface-container">
-        <div className="h-full bg-emerald-500" style={{ width: `${savedPct}%` }} />
-        <div className="h-full bg-rose-500" style={{ width: `${wastedPct}%` }} />
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-emerald-50 px-3 py-2">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-800">Saved</p>
-          <p className="mt-1 font-black text-emerald-900">{kg(savedKg)}</p>
-        </div>
-        <div className="rounded-xl bg-rose-50 px-3 py-2">
-          <p className="text-xs font-black uppercase tracking-widest text-rose-800">Wasted</p>
-          <p className="mt-1 font-black text-rose-900">{kg(wastedKg)}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TrendBars({ trends, days }) {
-  const max = Math.max(...trends.map((item) => trendValue(item)), 0.01)
-  const scrollable = days >= 30
-  const barWidth = days >= 60 ? 34 : 42
-  const gap = days >= 60 ? 12 : 14
-  const minChartWidth = scrollable
-    ? `${Math.max(trends.length * (barWidth + gap), days >= 60 ? 1800 : 1280)}px`
-    : undefined
-
-  return (
-    <div className={scrollable ? 'overflow-x-auto pb-3' : ''}>
-      <div
-        className="h-48 flex items-end"
-        style={scrollable ? { minWidth: minChartWidth, gap: `${gap}px` } : { gap: '0.5rem' }}
-      >
+    <div className="h-48 flex items-end gap-2">
       {trends.map((item) => {
-        const value = trendValue(item)
+        const value = Number(item.weight_kg || 0)
         return (
-          <div
-            key={`${item.date}-${item.end_date || item.date}`}
-            className="flex flex-col items-center gap-2"
-            style={scrollable ? { width: `${barWidth}px`, flex: `0 0 ${barWidth}px` } : { flex: '1 1 0', minWidth: 0 }}
-          >
+          <div key={item.date} className="flex-1 min-w-0 flex flex-col items-center gap-2">
             <div className="w-full h-36 flex items-end rounded-xl bg-surface-container-low overflow-hidden">
               <div
                 className="w-full rounded-t-xl bg-primary/80"
                 style={{ height: `${Math.max(4, (value / max) * 100)}%` }}
-                title={`${item.title || formatDate(item.date)} · ${kg(value)}`}
+                title={`${formatDate(item.date)} · ${kg(value)}`}
               />
             </div>
-            <span className="text-[10px] text-on-surface-variant truncate">{item.label || formatDate(item.date)}</span>
+            <span className="text-[10px] text-on-surface-variant truncate">{formatDate(item.date)}</span>
           </div>
         )
       })}
-      </div>
     </div>
   )
 }
@@ -269,30 +156,6 @@ export default function AnalyticsPage() {
     () => breakdown.reduce((sum, item) => sum + Number(item.weight_grams || 0), 0),
     [breakdown]
   )
-  const totalWastedKg = Number(summary.total_wasted_kg || 0)
-  const savedFromWasteKg = Number(summary.saved_from_waste_kg || 0)
-  const moneyLost = Number(summary.money_lost || 0)
-  const co2ImpactKg = Number(summary.co2_impact_kg || 0)
-  const cookedMealCount = Number(summary.cooked_meal_count || cookedMeals.length || 0)
-  const preventionRate = totalWastedKg + savedFromWasteKg > 0
-    ? (savedFromWasteKg / (totalWastedKg + savedFromWasteKg)) * 100
-    : 0
-  const wastePerCookedMeal = cookedMealCount > 0 ? totalWastedKg / cookedMealCount : 0
-  const costPerKg = totalWastedKg > 0 ? moneyLost / totalWastedKg : 0
-  const co2PerKg = totalWastedKg > 0 ? co2ImpactKg / totalWastedKg : 0
-  const atRiskValue = atRisk.reduce((sum, item) => sum + Number(item.price || item.estimated_price || 0), 0)
-  const avgWastePerDay = days > 0 ? totalWastedKg / days : 0
-  const worstTrend = trends.reduce((worst, item) => (
-    !worst || trendValue(item) > trendValue(worst) ? item : worst
-  ), null)
-  const bestTrend = trends.reduce((best, item) => (
-    !best || trendValue(item) < trendValue(best) ? item : best
-  ), null)
-  const trendSubtitle = days >= 60
-    ? 'Food waste by day, scroll horizontally to see the full period'
-    : days >= 30
-      ? 'Food waste by day, scroll horizontally for more spacing'
-      : 'Food waste by day'
 
   return (
     <div className="px-6 md:px-12 max-w-7xl mx-auto pb-12">
@@ -373,60 +236,13 @@ export default function AnalyticsPage() {
               action={{ to: '/meals', label: 'Open Meal Plans', icon: 'restaurant_menu' }}
             />
           ) : (
-            <>
-            <section className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.4fr] gap-6 mb-6">
-              <SavedVsWastedMeter savedKg={savedFromWasteKg} wastedKg={totalWastedKg} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                <MetricTile
-                  icon="health_metrics"
-                  label="Prevention score"
-                  value={percent(preventionRate)}
-                  detail="Share of tracked food rescued by cooking or saving leftovers."
-                />
-                <MetricTile
-                  icon="restaurant"
-                  label="Waste per meal"
-                  value={kg(wastePerCookedMeal)}
-                  detail="Average waste compared with cooked meals in this period."
-                  tone="rose"
-                />
-                <MetricTile
-                  icon="attach_money"
-                  label="Cost per kg wasted"
-                  value={money(costPerKg)}
-                  detail="Estimated grocery value lost for each kg of logged waste."
-                  tone="amber"
-                />
-                <MetricTile
-                  icon="eco"
-                  label="CO2e per kg"
-                  value={kg(co2PerKg)}
-                  detail="Estimated climate impact per kg of discarded food."
-                />
-                <MetricTile
-                  icon="event_busy"
-                  label="At-risk value"
-                  value={money(atRiskValue)}
-                  detail={`${atRisk.length} fridge item${atRisk.length === 1 ? '' : 's'} expiring soon.`}
-                  tone="sky"
-                />
-                <MetricTile
-                  icon="calendar_month"
-                  label="Daily waste rate"
-                  value={kg(avgWastePerDay)}
-                  detail={`Average per day across the selected ${days} day view.`}
-                  tone="rose"
-                />
-              </div>
-            </section>
-
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <section className="xl:col-span-2 space-y-6">
                 <div className="bg-surface-container-lowest rounded-[2rem] border border-outline-variant/10 p-6 shadow-sm">
                   <div className="flex items-center justify-between gap-3 mb-5">
                     <div>
                       <h2 className="font-headline text-xl font-bold text-on-surface">Trends over time</h2>
-                      <p className="text-sm text-on-surface-variant">{trendSubtitle}</p>
+                      <p className="text-sm text-on-surface-variant">Food waste by day</p>
                     </div>
                     {summary.comparison_to_last_period_pct != null && (
                       <span className="rounded-full bg-emerald-50 text-emerald-800 px-3 py-1 text-xs font-bold">
@@ -435,7 +251,7 @@ export default function AnalyticsPage() {
                       </span>
                     )}
                   </div>
-                  <TrendBars trends={trends} days={days} />
+                  <TrendBars trends={trends} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -473,7 +289,7 @@ export default function AnalyticsPage() {
                                 {info.icon}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-on-surface truncate">{prettyName(item.name)}</p>
+                                <p className="font-semibold text-on-surface truncate">{item.name}</p>
                                 <p className="text-xs text-on-surface-variant">
                                   {item.times_wasted} time{item.times_wasted === 1 ? '' : 's'} · {kg(item.weight_kg)}
                                 </p>
@@ -494,43 +310,11 @@ export default function AnalyticsPage() {
                 <div className="bg-surface-container-lowest rounded-[2rem] border border-outline-variant/10 p-6 shadow-sm">
                   <h2 className="font-headline text-xl font-bold text-on-surface mb-4">Smart insights</h2>
                   <div className="space-y-3">
-                    {insights.length ? (
-                      insights.map((insight) => (
-                        <div key={insight} className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-                          {insight}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
-                        Cook a meal or log waste to generate smarter suggestions.
+                    {insights.map((insight) => (
+                      <div key={insight} className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+                        {insight}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest rounded-[2rem] border border-outline-variant/10 p-6 shadow-sm">
-                  <h2 className="font-headline text-xl font-bold text-on-surface mb-4">Operational signals</h2>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-low px-4 py-3">
-                      <span className="font-semibold text-on-surface-variant">Highest waste day</span>
-                      <span className="font-black text-on-surface">
-                        {worstTrend ? `${formatDate(worstTrend.date)} · ${kg(trendValue(worstTrend))}` : 'No data'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-low px-4 py-3">
-                      <span className="font-semibold text-on-surface-variant">Lowest waste day</span>
-                      <span className="font-black text-on-surface">
-                        {bestTrend ? `${formatDate(bestTrend.date)} · ${kg(trendValue(bestTrend))}` : 'No data'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-low px-4 py-3">
-                      <span className="font-semibold text-on-surface-variant">Categories affected</span>
-                      <span className="font-black text-on-surface">{breakdown.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-container-low px-4 py-3">
-                      <span className="font-semibold text-on-surface-variant">Receipt value at risk</span>
-                      <span className="font-black text-on-surface">{money(atRiskValue)}</span>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -543,34 +327,17 @@ export default function AnalyticsPage() {
                   </div>
                   {cookedMeals.length ? (
                     <div className="space-y-3">
-                      {cookedMeals.slice(0, 5).map((meal) => {
-                        const usageRows = meal.ingredient_usage || meal.metadata?.ingredient_usage || []
-                        return (
-                        <div key={meal.event_id || meal.id} className="rounded-2xl bg-surface-container-low px-4 py-3">
-                          <div className="flex items-start gap-3">
+                      {cookedMeals.slice(0, 4).map((meal) => (
+                        <div key={meal.event_id || meal.id} className="flex items-center gap-3">
                           <span className="material-symbols-outlined rounded-xl bg-emerald-100 text-emerald-700 p-2">
                             restaurant
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-black text-on-surface truncate">
-                              {prettyName(meal.recipe_name || meal.name, 'Cooked meal')}
-                            </p>
-                            <p className="text-xs text-on-surface-variant">
-                              {formatDate(meal.cooked_date)} · {grams(meal.quantity_grams)} used
-                            </p>
-                          </div>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
-                            <span className="rounded-full bg-white px-2.5 py-1 text-on-surface-variant">
-                              {usageRows.length || 1} ingredient{usageRows.length === 1 ? '' : 's'}
-                            </span>
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800">
-                              Waste tracked
-                            </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-on-surface truncate">{meal.recipe_name}</p>
+                            <p className="text-xs text-on-surface-variant">{formatDate(meal.cooked_date)}</p>
                           </div>
                         </div>
-                        )
-                      })}
+                      ))}
                     </div>
                   ) : (
                     <p className="text-sm text-on-surface-variant">No cooked meals in this period.</p>
@@ -584,7 +351,7 @@ export default function AnalyticsPage() {
                       {atRisk.map((item) => (
                         <div key={`${item.name}-${item.expiry_date}`} className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="font-semibold text-on-surface truncate">{prettyName(item.name)}</p>
+                            <p className="font-semibold text-on-surface truncate">{item.name}</p>
                             <p className="text-xs text-on-surface-variant">{formatDate(item.expiry_date)}</p>
                           </div>
                           <span className="rounded-full bg-amber-50 text-amber-800 px-2.5 py-1 text-xs font-bold">
@@ -616,7 +383,6 @@ export default function AnalyticsPage() {
                 </div>
               </aside>
             </div>
-            </>
           )}
         </>
       )}
