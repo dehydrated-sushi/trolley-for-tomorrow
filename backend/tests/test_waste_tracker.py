@@ -37,6 +37,20 @@ def test_cooked_meal_can_be_logged_and_listed(client):
         "quantity_grams": 650,
         "cooked_date": today,
         "notes": "Used expiring tomato",
+        "metadata": {
+            "cooked_time": "18:30",
+            "action": "cooked",
+            "ingredient_usage": [
+                {
+                    "item": "Chicken breast",
+                    "category": "protein",
+                    "usage": "300 g used",
+                    "remaining": "200 g",
+                    "status": "partial",
+                    "grams_used": 300,
+                }
+            ],
+        },
     })
 
     assert response.status_code == 201, response.get_json()
@@ -46,6 +60,8 @@ def test_cooked_meal_can_be_logged_and_listed(client):
     assert cooked["servings"] == "2 servings"
     assert cooked["quantity_grams"] == 650
     assert cooked["cooked_date"] == today
+    assert cooked["cooked_time"] == "18:30"
+    assert cooked["ingredient_usage"][0]["item"] == "Chicken breast"
 
     response = client.get("/api/waste/cooked-meals?days=7")
 
@@ -53,6 +69,48 @@ def test_cooked_meal_can_be_logged_and_listed(client):
     cooked_meals = response.get_json()["cooked_meals"]
     assert len(cooked_meals) == 1
     assert cooked_meals[0]["name"] == "Chicken Tomato Pasta"
+    assert cooked_meals[0]["metadata"]["action"] == "cooked"
+
+
+def test_cooked_meal_decrements_measurable_fridge_quantity(app, client):
+    today = date.today().isoformat()
+    with app.app_context():
+        item = ReceiptItem(
+            receipt_filename="receipt.jpg",
+            receipt_path="uploads/receipt.jpg",
+            name="Chicken breast",
+            matched_name="chicken breast",
+            qty="500 g",
+            price=10.0,
+        )
+        db.session.add(item)
+        db.session.commit()
+        item_id = item.id
+
+    response = client.post("/api/waste/cooked-meals", json={
+        "recipe_id": 42,
+        "recipe_name": "Chicken Tomato Pasta",
+        "servings": 1,
+        "quantity_grams": 300,
+        "cooked_date": today,
+        "metadata": {
+            "ingredient_usage": [
+                {
+                    "item": "Chicken breast",
+                    "receipt_item_id": item_id,
+                    "grams_used": 300,
+                }
+            ],
+        },
+    })
+
+    assert response.status_code == 201, response.get_json()
+    assert response.get_json()["fridge_updates"][0]["new_qty"] == "200 g"
+
+    with app.app_context():
+        item = db.session.get(ReceiptItem, item_id)
+        assert item.qty == "200 g"
+        assert item.price == 4.0
 
 
 def test_waste_analytics_returns_dashboard_shape(app, client):

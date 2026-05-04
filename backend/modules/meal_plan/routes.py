@@ -513,6 +513,7 @@ def get_meal_recommendations():
         # ---- fridge items + price lookup ----
         rows = db.session.execute(text("""
             SELECT
+                id,
                 name,
                 matched_name,
                 LOWER(TRIM(COALESCE(NULLIF(matched_name, ''), name))) AS match_name,
@@ -529,10 +530,13 @@ def get_meal_recommendations():
         price_values = {}
         price_per_gram_values = {}
         expiry_map = {}
+        receipt_item_id_map = {}
         for r in rows:
             row = r._mapping
             name = row["match_name"]
             all_items.add(name)
+            if name not in receipt_item_id_map:
+                receipt_item_id_map[name] = row["id"]
 
             price = row["price"]
             if price is not None:
@@ -698,6 +702,7 @@ def get_meal_recommendations():
                         "name": ing,
                         "category": classify(ing),
                         "fridge_item": fridge_item,
+                        "receipt_item_id": receipt_item_id_map.get(fridge_item),
                         "expiry_date": expiry_date.isoformat() if expiry_date else None,
                         "days_until_expiry": _days_until(expiry_date),
                         "grams_per_portion": (
