@@ -700,7 +700,8 @@ def get_meal_recommendations():
                     expiry_date = expiry_map.get(fridge_item)
                     matched_details.append({
                         "name": ing,
-                        "category": classify(ing),
+                        "recipe_ingredient": ing,
+                        "category": classify(fridge_item),
                         "fridge_item": fridge_item,
                         "receipt_item_id": receipt_item_id_map.get(fridge_item),
                         "expiry_date": expiry_date.isoformat() if expiry_date else None,
