@@ -44,6 +44,36 @@ function prettyName(value, fallback = 'Recipe') {
     .join(' ')
 }
 
+function currentTimeValue() {
+  return new Date().toTimeString().slice(0, 5)
+}
+
+function buildCookedIngredientUsage(meal) {
+  return (meal?.matched_ingredients || []).map((ingredient) => {
+    const name = ingredient.name || ingredient.fridge_item || 'Ingredient'
+    const gramsUsed = Number(ingredient.grams_per_portion || 0)
+    const pricePerGram = Number(ingredient.price_per_gram || 0)
+    const estimatedCost = Number.isFinite(pricePerGram) && pricePerGram > 0
+      ? gramsUsed * pricePerGram
+      : Number(ingredient.estimated_cost || 0)
+
+    return {
+      name,
+      display_name: ingredient.fridge_item || name,
+      fridge_item: ingredient.fridge_item || name,
+      category: ingredient.category || 'other',
+      receipt_item_id: ingredient.receipt_item_id || null,
+      grams_used: Number.isFinite(gramsUsed) ? Math.max(0, gramsUsed) : 0,
+      quantity_grams: Number.isFinite(gramsUsed) ? Math.max(0, gramsUsed) : 0,
+      estimated_cost: Number.isFinite(estimatedCost) ? Math.max(0, estimatedCost) : 0,
+      price_per_gram: Number.isFinite(pricePerGram) && pricePerGram > 0 ? pricePerGram : null,
+      expiry_date: ingredient.expiry_date || null,
+      days_until_expiry: ingredient.days_until_expiry ?? null,
+      weight_confidence: ingredient.weight_confidence || null,
+    }
+  })
+}
+
 /** Dominant category across the full ingredient list (for hero tint). */
 function dominantCategory(recipe) {
   const counts = {}
