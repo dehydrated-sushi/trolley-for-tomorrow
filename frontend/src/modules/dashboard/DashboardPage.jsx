@@ -112,8 +112,8 @@ export default function DashboardPage() {
   const [shoppingTotalCount, setShoppingTotalCount] = useState(0)
 
   // Carbon
-  const [carbonKg, setCarbonKg] = useState(null)
-  const [carbonLoading, setCarbonLoading] = useState(true)
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(true)
 
   // Tips
   const [tips, setTips] = useState(FALLBACK_TIPS)
@@ -150,16 +150,32 @@ export default function DashboardPage() {
     setShoppingItems(unchecked)
   }, [])
 
-  // Fetch carbon + at-risk items from waste analytics
+  // Fetch weekly waste analytics once and reuse it across cards
   useEffect(() => {
+    let ignore = false
+
+    setAnalyticsLoading(true)
+
     apiFetch('/api/waste/analytics?days=7')
       .then((data) => {
-        setCarbonKg(data.weekly_summary?.co2_impact_kg ?? null)
+        if (!ignore) {
+          setAnalyticsSummary(data?.weekly_summary || {})
+        }
       })
-      .catch((err) => {
-        console.error('Failed to load waste analytics:', err)
+      .catch(() => {
+        if (!ignore) {
+          setAnalyticsSummary(null)
+        }
       })
-      .finally(() => setCarbonLoading(false))
+      .finally(() => {
+        if (!ignore) {
+          setAnalyticsLoading(false)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   // Fetch tips
@@ -193,26 +209,6 @@ export default function DashboardPage() {
     return () => {
       window.removeEventListener('profile-updated', syncSnapshot)
       window.removeEventListener('focus', syncSnapshot)
-    }
-  }, [])
-
-  useEffect(() => {
-    let ignore = false
-    setAnalyticsLoading(true)
-
-    apiFetch('/api/waste/analytics?days=7')
-      .then((payload) => {
-        if (!ignore) setAnalyticsSummary(payload?.weekly_summary || {})
-      })
-      .catch(() => {
-        if (!ignore) setAnalyticsSummary(null)
-      })
-      .finally(() => {
-        if (!ignore) setAnalyticsLoading(false)
-      })
-
-    return () => {
-      ignore = true
     }
   }, [])
 
@@ -382,11 +378,13 @@ export default function DashboardPage() {
               <p className="text-emerald-100/60 text-xs mb-5">From food wasted this week</p>
 
               <div className="mb-1">
-                {carbonLoading ? (
+                {analyticsLoading ? (
                   <span className="text-emerald-300 text-sm">Loading...</span>
-                ) : carbonKg !== null ? (
+                ) : analyticsSummary?.co2_impact_kg != null ? (
                   <>
-                    <span className="text-5xl font-extrabold leading-none">{carbonKg.toFixed(1)}</span>
+                    <span className="text-5xl font-extrabold leading-none">
+                      {Number(analyticsSummary.co2_impact_kg).toFixed(1)}
+                    </span>
                     <span className="text-emerald-300 font-semibold ml-1.5">kg</span>
                   </>
                 ) : (
