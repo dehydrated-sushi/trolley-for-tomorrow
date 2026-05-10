@@ -196,6 +196,26 @@ export default function DashboardPage() {
     }
   }, [])
 
+  useEffect(() => {
+    let ignore = false
+    setAnalyticsLoading(true)
+
+    apiFetch('/api/waste/analytics?days=7')
+      .then((payload) => {
+        if (!ignore) setAnalyticsSummary(payload?.weekly_summary || {})
+      })
+      .catch(() => {
+        if (!ignore) setAnalyticsSummary(null)
+      })
+      .finally(() => {
+        if (!ignore) setAnalyticsLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
   const impactCards = [
     { title: 'Low-waste focus', value: settings.lowWasteFocus, icon: 'eco' },
     { title: 'Household routine', value: settings.householdSize, icon: 'groups' },
@@ -400,11 +420,51 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.6, ease: EASE }}
-          className="rounded-[2rem] border-2 border-dashed border-outline-variant/30 bg-surface-container-lowest/50 p-10 text-center"
+          className="bg-white rounded-[2rem] border border-emerald-100 shadow-sm p-6"
         >
-          <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3 block">bar_chart</span>
-          <h3 className="font-bold text-on-surface-variant/50 text-lg mb-1">Waste Summary</h3>
-          <p className="text-on-surface-variant/40 text-sm">Coming soon — weekly waste trends and insights</p>
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/60 font-bold mb-2">Waste Summary</p>
+              <h3 className="text-2xl font-extrabold text-emerald-950">Connected to Analytics</h3>
+              <p className="text-sm text-emerald-800/70 mt-1">This uses the same weekly summary data as your analytics page.</p>
+            </div>
+            <Link
+              to="/analytics"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:gap-2 transition-all"
+            >
+              Open analytics
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Link>
+          </div>
+
+          {analyticsLoading ? (
+            <div className="rounded-[1.5rem] bg-emerald-50 border border-emerald-100 px-5 py-8 text-center text-emerald-800/70 text-sm font-semibold">
+              Loading weekly waste summary...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <SnapshotCard
+                title="Food wasted"
+                value={`${Number(analyticsSummary?.total_wasted_kg || 0).toFixed(2)} kg`}
+                icon="delete"
+              />
+              <SnapshotCard
+                title="Money lost"
+                value={`$${Number(analyticsSummary?.money_lost || 0).toFixed(2)}`}
+                icon="payments"
+              />
+              <SnapshotCard
+                title="CO2 impact"
+                value={`${Number(analyticsSummary?.co2_impact_kg || 0).toFixed(2)} kg`}
+                icon="co2"
+              />
+              <SnapshotCard
+                title="Cooked meals"
+                value={String(analyticsSummary?.cooked_meal_count || 0)}
+                icon="restaurant"
+              />
+            </div>
+          )}
         </motion.div>
 
         <motion.div
