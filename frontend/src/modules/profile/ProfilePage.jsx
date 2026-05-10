@@ -8,9 +8,6 @@ const DEFAULT_SETTINGS = {
   householdSize: '2 people',
   lowWasteFocus: 'Use food before it expires',
   impactGoal: 'Reduce food waste each week',
-  expiryReminders: true,
-  useFirstMeals: true,
-  shoppingGuardrails: true,
 }
 
 const SETTINGS_KEY = 'profile_settings'
@@ -292,24 +289,6 @@ export default function ProfilePage() {
               <InfoCard label="Current impact goal" value={settings.impactGoal} />
             </div>
 
-            <div className="space-y-3 mb-8">
-              <TogglePreview
-                label="Expiry reminders"
-                description="Show stronger nudges when ingredients should be used soon."
-                checked={settings.expiryReminders}
-              />
-              <TogglePreview
-                label="Use-first meal ideas"
-                description="Prioritise recipes that help use food already at home."
-                checked={settings.useFirstMeals}
-              />
-              <TogglePreview
-                label="Shopping guardrails"
-                description="Keep the shopping list focused on essentials and missing items."
-                checked={settings.shoppingGuardrails}
-              />
-            </div>
-
             <AnimatePresence initial={false}>
               {editingPreferences && (
                 <motion.div
@@ -361,45 +340,26 @@ export default function ProfilePage() {
                       <option>Keep better track of expiry risk</option>
                     </select>
                   </label>
-
-                  <div className="space-y-3 mb-8">
-                    <ToggleRow
-                      label="Expiry reminders"
-                      description="Show stronger nudges when ingredients should be used soon."
-                      checked={settings.expiryReminders}
-                      onChange={(value) => updateSetting('expiryReminders', value)}
-                    />
-                    <ToggleRow
-                      label="Use-first meal ideas"
-                      description="Prioritise recipes that help use food already at home."
-                      checked={settings.useFirstMeals}
-                      onChange={(value) => updateSetting('useFirstMeals', value)}
-                    />
-                    <ToggleRow
-                      label="Shopping guardrails"
-                      description="Keep the shopping list focused on essentials and missing items."
-                      checked={settings.shoppingGuardrails}
-                      onChange={(value) => updateSetting('shoppingGuardrails', value)}
-                    />
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-full bg-emerald-900 text-white font-semibold hover:bg-emerald-800 transition-colors"
-            >
-              Save profile
-            </button>
+            <div className="mt-2 flex flex-wrap gap-4">
+              <button
+                type="submit"
+                className="px-6 py-3 rounded-full bg-emerald-900 text-white font-semibold hover:bg-emerald-800 transition-colors"
+              >
+                Save profile
+              </button>
 
-            <button
-              type="reset"
-              to="/DevResetButton"
-              className="px-6 py-3 rounded-full bg-emerald-900 text-white font-semibold hover:bg-emerald-800 transition-colors"
-            >
-              reset fridge data
-            </button>
+              <button
+                type="reset"
+                to="/DevResetButton"
+                className="px-6 py-3 rounded-full bg-emerald-900 text-white font-semibold hover:bg-emerald-800 transition-colors"
+              >
+                reset fridge data
+              </button>
+            </div>
           </div>
         </motion.form>
 
@@ -443,47 +403,5 @@ function InfoCard({ label, value, muted = false }) {
       <p className={`text-sm font-semibold ${muted ? 'text-stone-700' : 'text-emerald-950'}`}>{label}</p>
       <p className={`text-sm mt-1 ${muted ? 'text-stone-500' : 'text-emerald-800/75'}`}>{value}</p>
     </div>
-  )
-}
-
-function TogglePreview({ label, description, checked }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-4">
-      <div>
-        <p className="text-sm font-semibold text-emerald-950">{label}</p>
-        <p className="text-sm text-emerald-800/70 mt-1">{description}</p>
-      </div>
-      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${checked ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
-        {checked ? 'On' : 'Off'}
-      </span>
-    </div>
-  )
-}
-
-function ToggleRow({ label, description, checked, onChange }) {
-  return (
-    <label className="flex items-start justify-between gap-4 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-4 cursor-pointer">
-      <div>
-        <p className="text-sm font-semibold text-emerald-950">{label}</p>
-        <p className="text-sm text-emerald-800/70 mt-1">{description}</p>
-      </div>
-      <span
-        className={`relative mt-1 inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
-          checked ? 'bg-emerald-700' : 'bg-emerald-200'
-        }`}
-      >
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          className="sr-only"
-        />
-        <span
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </span>
-    </label>
   )
 }

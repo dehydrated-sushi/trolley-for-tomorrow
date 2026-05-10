@@ -10,9 +10,6 @@ const DEFAULT_SETTINGS = {
   householdSize: '2 people',
   lowWasteFocus: 'Use food before it expires',
   impactGoal: 'Reduce food waste each week',
-  expiryReminders: true,
-  useFirstMeals: true,
-  shoppingGuardrails: true,
 }
 
 const mockExpiringItems = [
