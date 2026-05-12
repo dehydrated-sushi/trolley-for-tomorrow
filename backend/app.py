@@ -14,6 +14,7 @@ from core.auth import jwt
 from core.config import Config
 from core.database import db
 from core.errors import register_error_handlers
+from modules.food_waste.service import init_food_waste_service
 from security.jwt_handlers import register_jwt_error_handlers
 from security.rate_limiter import limiter
 from routes.test_routes import test_bp
@@ -26,6 +27,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    init_food_waste_service(app)
 
     # Initialise extensions
     db.init_app(app)

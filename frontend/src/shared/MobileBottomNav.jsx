@@ -6,6 +6,7 @@ const TABS = [
   { label: 'MEALS', icon: 'restaurant_menu', to: '/meals' },
   { label: 'COOKED', icon: 'room_service', to: '/cooked-meals' },
   { label: 'STATS', icon: 'query_stats', to: '/analytics' },
+  { label: 'WASTE', icon: 'local_dining', to: '/food-waste' },
   { label: 'SHOP', icon: 'shopping_basket', to: '/shopping' },
   { label: 'PROFILE', icon: 'person', to: '/profile' },
 ]

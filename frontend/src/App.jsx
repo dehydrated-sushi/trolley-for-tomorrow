@@ -8,6 +8,7 @@ import FridgeView from './modules/fridge/FridgeView'
 import MealsPage from './modules/meals/MealsPage'
 import CookedMealsPage from './modules/cooked/CookedMealsPage'
 import AnalyticsPage from './modules/analytics/AnalyticsPage'
+import FoodWastePage from './modules/food_waste/FoodWastePage'
 import ProfilePage from './modules/profile/ProfilePage'
 import ShoppingListPage from './modules/shopping/ShoppingListPage'
 import UploadReceiptPage from './modules/receipt/UploadReceiptPage'
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/meals" element={<MealsPage />} />
             <Route path="/cooked-meals" element={<CookedMealsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/food-waste" element={<FoodWastePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/shopping" element={<ShoppingListPage />} />
             <Route path="/upload-receipt" element={<UploadReceiptPage />} />
