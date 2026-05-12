@@ -21,3 +21,5 @@ MarkupSafe==3.0.2
 PyJWT==2.10.1
 pillow-heif
 gunicorn==23.0.0
+ultralytics==8.3.146
+opencv-python-headless==4.11.0.86
