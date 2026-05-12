@@ -1,2 +1,6 @@
 backend/instance/food_app.db
 backend/instance/app.db
+backend/static/predictions/*
+!backend/static/predictions/.gitkeep
+backend/temp_uploads/*
+!backend/temp_uploads/.gitkeep
