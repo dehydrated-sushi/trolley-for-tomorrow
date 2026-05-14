@@ -25,11 +25,6 @@ function MetricLegend() {
       icon: 'category',
       desc: 'The type of food the model identified on the plate (e.g. rice, noodles, salad).',
     },
-    {
-      label: 'Confidence',
-      icon: 'verified',
-      desc: 'How certain the model is about its prediction. Above 70% is generally considered reliable.',
-    },
   ]
 
   return (
