@@ -20,11 +20,6 @@ function MetricLegend() {
       icon: 'circle',
       desc: 'The percentage of the plate area that is visibly empty. A higher value means more food was consumed.',
     },
-    {
-      label: 'Predicted Class',
-      icon: 'category',
-      desc: 'The type of food the model identified on the plate (e.g. rice, noodles, salad).',
-    },
   ]
 
   return (
