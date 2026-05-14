@@ -8,6 +8,59 @@ function formatPercent(value) {
   return typeof value === 'number' ? `${value.toFixed(1)}%` : 'N/A'
 }
 
+function MetricLegend() {
+  const items = [
+    {
+      label: 'Food Left',
+      icon: 'restaurant',
+      desc: 'The percentage of the plate area still covered by food. A higher value means more food was left uneaten.',
+    },
+    {
+      label: 'Plate Empty',
+      icon: 'circle',
+      desc: 'The percentage of the plate area that is visibly empty. A higher value means more food was consumed.',
+    },
+    {
+      label: 'Predicted Class',
+      icon: 'category',
+      desc: 'The type of food the model identified on the plate (e.g. rice, noodles, salad).',
+    },
+    {
+      label: 'Confidence',
+      icon: 'verified',
+      desc: 'How certain the model is about its prediction. Above 70% is generally considered reliable.',
+    },
+  ]
+
+  return (
+    <div className="rounded-[1.75rem] border border-emerald-100 bg-white p-6 editorial-shadow">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="material-symbols-outlined text-emerald-700">info</span>
+        <h3 className="font-headline text-lg font-bold text-emerald-950">What do these numbers mean?</h3>
+      </div>
+      <div className="overflow-hidden rounded-[1.25rem] border border-emerald-100 divide-y divide-emerald-100">
+        {items.map(({ label, icon, desc }) => (
+          <div
+            key={label}
+            className="flex items-start gap-4 bg-white px-5 py-4 transition-colors hover:bg-emerald-50/50"
+          >
+            <span className="material-symbols-outlined mt-0.5 flex-shrink-0 text-[20px] text-emerald-600">
+              {icon}
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">{label}</div>
+              <div className="mt-1 text-sm leading-6 text-emerald-900/70">{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs leading-5 text-emerald-900/50">
+        * Results are estimates based on image segmentation and may vary depending on photo angle, lighting, and food type.
+      </p>
+    </div>
+  )
+}
+
 export default function FoodWastePage() {
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
@@ -235,6 +288,10 @@ export default function FoodWastePage() {
             )}
           </article>
         </div>
+
+        {/* Metric Legend — shown always, below the two cards */}
+        <MetricLegend />
+
       </div>
     </section>
   )

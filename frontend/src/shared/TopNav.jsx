@@ -8,7 +8,9 @@ const NAV_LINKS = [
   { label: 'Meal Plans', to: '/meals' },
   { label: 'Cooked Meals', to: '/cooked-meals' },
   { label: 'Analytics', to: '/analytics' },
+  { label: 'Food Waste', to: '/food-waste' },
   { label: 'Shopping List', to: '/shopping' },
+  { label: 'Upload Receipt', to: '/upload-receipt' },
   { label: 'Profile', to: '/profile' },
 ]
 
