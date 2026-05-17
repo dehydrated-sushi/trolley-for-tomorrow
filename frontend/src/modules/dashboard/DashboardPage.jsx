@@ -12,9 +12,6 @@ const DEFAULT_SETTINGS = {
   householdSize: '2 people',
   lowWasteFocus: 'Use food before it expires',
   impactGoal: 'Reduce food waste each week',
-  expiryReminders: true,
-  useFirstMeals: true,
-  shoppingGuardrails: true,
 }
 
 // Fallback tips in case API returns empty
@@ -115,8 +112,8 @@ export default function DashboardPage() {
   const [shoppingTotalCount, setShoppingTotalCount] = useState(0)
 
   // Carbon
-  const [carbonKg, setCarbonKg] = useState(null)
-  const [carbonLoading, setCarbonLoading] = useState(true)
+  const [analyticsSummary, setAnalyticsSummary] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(true)
 
   // Tips
   const [tips, setTips] = useState(FALLBACK_TIPS)
@@ -153,16 +150,32 @@ export default function DashboardPage() {
     setShoppingItems(unchecked)
   }, [])
 
-  // Fetch carbon + at-risk items from waste analytics
+  // Fetch weekly waste analytics once and reuse it across cards
   useEffect(() => {
+    let ignore = false
+
+    setAnalyticsLoading(true)
+
     apiFetch('/api/waste/analytics?days=7')
       .then((data) => {
-        setCarbonKg(data.weekly_summary?.co2_impact_kg ?? null)
+        if (!ignore) {
+          setAnalyticsSummary(data?.weekly_summary || {})
+        }
       })
-      .catch((err) => {
-        console.error('Failed to load waste analytics:', err)
+      .catch(() => {
+        if (!ignore) {
+          setAnalyticsSummary(null)
+        }
       })
-      .finally(() => setCarbonLoading(false))
+      .finally(() => {
+        if (!ignore) {
+          setAnalyticsLoading(false)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   // Fetch tips
@@ -365,11 +378,13 @@ export default function DashboardPage() {
               <p className="text-emerald-100/60 text-xs mb-5">From food wasted this week</p>
 
               <div className="mb-1">
-                {carbonLoading ? (
+                {analyticsLoading ? (
                   <span className="text-emerald-300 text-sm">Loading...</span>
-                ) : carbonKg !== null ? (
+                ) : analyticsSummary?.co2_impact_kg != null ? (
                   <>
-                    <span className="text-5xl font-extrabold leading-none">{carbonKg.toFixed(1)}</span>
+                    <span className="text-5xl font-extrabold leading-none">
+                      {Number(analyticsSummary.co2_impact_kg).toFixed(1)}
+                    </span>
                     <span className="text-emerald-300 font-semibold ml-1.5">kg</span>
                   </>
                 ) : (
@@ -403,11 +418,51 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.6, ease: EASE }}
-          className="rounded-[2rem] border-2 border-dashed border-outline-variant/30 bg-surface-container-lowest/50 p-10 text-center"
+          className="bg-white rounded-[2rem] border border-emerald-100 shadow-sm p-6"
         >
-          <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3 block">bar_chart</span>
-          <h3 className="font-bold text-on-surface-variant/50 text-lg mb-1">Waste Summary</h3>
-          <p className="text-on-surface-variant/40 text-sm">Coming soon — weekly waste trends and insights</p>
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-700/60 font-bold mb-2">Waste Summary</p>
+              <h3 className="text-2xl font-extrabold text-emerald-950">Connected to Analytics</h3>
+              <p className="text-sm text-emerald-800/70 mt-1">This uses the same weekly summary data as your analytics page.</p>
+            </div>
+            <Link
+              to="/analytics"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:gap-2 transition-all"
+            >
+              Open analytics
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Link>
+          </div>
+
+          {analyticsLoading ? (
+            <div className="rounded-[1.5rem] bg-emerald-50 border border-emerald-100 px-5 py-8 text-center text-emerald-800/70 text-sm font-semibold">
+              Loading weekly waste summary...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <SnapshotCard
+                title="Food wasted"
+                value={`${Number(analyticsSummary?.total_wasted_kg || 0).toFixed(2)} kg`}
+                icon="delete"
+              />
+              <SnapshotCard
+                title="Money lost"
+                value={`$${Number(analyticsSummary?.money_lost || 0).toFixed(2)}`}
+                icon="payments"
+              />
+              <SnapshotCard
+                title="CO2 impact"
+                value={`${Number(analyticsSummary?.co2_impact_kg || 0).toFixed(2)} kg`}
+                icon="co2"
+              />
+              <SnapshotCard
+                title="Cooked meals"
+                value={String(analyticsSummary?.cooked_meal_count || 0)}
+                icon="restaurant"
+              />
+            </div>
+          )}
         </motion.div>
 
         <motion.div
